@@ -5,6 +5,7 @@ require(readr)
 require(ggplot2)
 require(reshape2)
 require(data.table)
+require(ggdendro)
 
 # Noticeably, "HbA1c_MAGIC_Mixed_AllSNPs.txt" is not included in this
 # list of summary stats. That's because its significance values
@@ -141,8 +142,35 @@ window_pvals = window_pvals[1:(hit_num-1),]
 
 stuff = list(hit_pvals, window_pvals)
 save(stuff, file="myfile.RData")
+
+load("myfile.RData")
 hit_pvals = stuff[[1]]
 window_pvals = stuff[[2]]
+
+# A possible way to remove redundancy:
+# Identify SNPs in heatmap only by position; not by study.
+# If two SNPs are within 10000 bp of one another, remove one of them.
+
+loci = as.data.frame(list(chrom = sapply(rownames(hit_pvals), function(x) {strsplit(x, "_")[[1]][1]}), 
+			  pos = sapply(rownames(hit_pvals), function(x) {as.numeric(strsplit(x, "_")[[1]][2])})))
+# Return a boolean value stating whether this SNP is a duplicate of one above it in the list
+dup_snps = sapply(1:dim(loci)[1], function(x)
+	{
+		my_chrom = loci$chrom[x]
+		my_pos = loci$pos[x]
+
+		return(sum((loci$chrom[1:x] == my_chrom) & (abs(loci$pos[1:x] - my_pos) < 100000)) > 1)
+	})
+
+# If SNP isn't on a conventional chromosome, just get rid of it
+dup_snps[is.na(dup_snps)] = TRUE
+
+hit_pvals = hit_pvals[which(!dup_snps),]
+window_pvals = window_pvals[which(!dup_snps),]
+loci = loci[which(!dup_snps),]
+rownames(hit_pvals) = paste(loci$chrom, loci$pos, sep="_")
+rownames(window_pvals) = paste(loci$chrom, loci$pos, sep="_")
+
 
 # Note: This is just for visualization...comparing pvalues from one
 # study to another isn't a rigorous method of comparison, and I'll
@@ -170,13 +198,33 @@ window_pvals[na_status] = NA
 window_pvals = window_pvals[hc_window_snps$order,]
 window_pvals = window_pvals[,hc_window_studies$order]
 
+# Plot dendrograms. Later, we'll assemble the plot by code; for now, we'll just have
+# to stitch them together manually
+g_hsn_dendro = ggdendrogram(hc_hit_snps) + coord_flip() + scale_y_reverse() + theme_dendro()
+g_hsn_dendro
+ggsave("gwas_tophit_snp_dendro.png", width = 8, height = 100, units = "in", dpi = 300, limitsize=FALSE)
+
+g_hst_dendro = ggdendrogram(hc_hit_studies) + scale_y_reverse() + theme_dendro()
+g_hst_dendro
+ggsave("gwas_tophit_study_dendro.png", width = 8, height = 8, units = "in", dpi = 300, limitsize=FALSE)
+
+g_wsn_dendro = ggdendrogram(hc_window_snps) + coord_flip() + scale_y_reverse() + theme_dendro()
+g_wsn_dendro
+ggsave("gwas_window_snp_dendro.png", width = 8, height = 100, units = "in", dpi = 300, limitsize=FALSE)
+
+g_wst_dendro = ggdendrogram(hc_window_studies) + scale_y_reverse() + theme_dendro()
+g_wst_dendro
+ggsave("gwas_window_study_dendro.png", width = 8, height = 8, units = "in", dpi = 300, limitsize=FALSE)
+
+
+
 # Plot heatmap
 heat = melt(hit_pvals, id="gene")
 g = ggplot(data = heat, aes(x = Var2, y = Var1)) +
 		geom_tile(aes(fill = value)) +
 		scale_fill_gradient2(low = "white", high = 'orangered4', midpoint = median(heat$value, na.rm=TRUE)) +
 		theme(axis.text.y=element_text(size=7),
-		      axis.text.x = element_text(angle = 45, hjust = 1)) +
+		      axis.text.x = element_text(angle = 90, hjust = 1)) +
 		labs(x = "Replication GWAS") +
 		labs(y = "Discovery GWAS Hit")
 
@@ -191,7 +239,7 @@ g = ggplot(data = heat, aes(x = Var2, y = Var1)) +
 		labs(x = "Replication GWAS") +
 		labs(y = "Discovery GWAS Hit")
 
-ggsave("gwas_tophit_replication_compressed.png", width = 6, height = 16, units = "in", dpi = 300, limitsize=FALSE)
+ggsave("gwas_tophit_replication_compressed.png", width = 4, height = 10, units = "in", dpi = 300, limitsize=FALSE)
 
 # Same thing for window-adjusted
 heat = melt(window_pvals, id="gene")
@@ -199,7 +247,7 @@ g = ggplot(data = heat, aes(x = Var2, y = Var1)) +
 		geom_tile(aes(fill = value)) +
 		scale_fill_gradient2(low = "white", high = 'orangered4', midpoint = median(heat$value, na.rm=TRUE)) +
 		theme(axis.text.y=element_text(size=7),
-		      axis.text.x = element_text(angle = 45, hjust = 1)) +
+		      axis.text.x = element_text(angle = 90, hjust = 1)) +
 		labs(x = "Replication GWAS") +
 		labs(y = "Discovery GWAS Hit")
 
@@ -214,6 +262,8 @@ g = ggplot(data = heat, aes(x = Var2, y = Var1)) +
 		labs(x = "Replication GWAS") +
 		labs(y = "Discovery GWAS Hit")
 
-ggsave("gwas_window_replication_compressed.png", width = 6, height = 16, units = "in", dpi = 300, limitsize=FALSE)
+ggsave("gwas_window_replication_compressed.png", width = 4, height = 10, units = "in", dpi = 300, limitsize=FALSE)
+
+
 
 
