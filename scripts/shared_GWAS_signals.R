@@ -141,6 +141,8 @@ window_pvals = window_pvals[1:(hit_num-1),]
 
 stuff = list(hit_pvals, window_pvals)
 save(stuff, file="myfile.RData")
+hit_pvals = stuff[[1]]
+window_pvals = stuff[[2]]
 
 # Note: This is just for visualization...comparing pvalues from one
 # study to another isn't a rigorous method of comparison, and I'll
@@ -149,6 +151,24 @@ hit_pvals = -log10(hit_pvals)
 hit_pvals = pmin(hit_pvals, 20)	# At a certain point, a hit is a hit 
 window_pvals = -log10(window_pvals)
 window_pvals = pmin(window_pvals, 20)	# At a certain point, a hit is a hit 
+
+# Clustering by rows and by columns
+# Reorder matrix for plotting heatmap
+na_status = is.na(hit_pvals)
+hit_pvals[na_status] = 0	# For now, let NAs simply mean no association
+hc_hit_snps = hclust(dist(hit_pvals))
+hc_hit_studies = hclust(dist(t(hit_pvals)))
+hit_pvals[na_status] = NA
+hit_pvals = hit_pvals[hc_hit_snps$order,]
+hit_pvals = hit_pvals[,hc_hit_studies$order]
+
+na_status = is.na(window_pvals)
+window_pvals[na_status] = 0	# For now, let NAs simply mean no association
+hc_window_snps = hclust(dist(window_pvals))
+hc_window_studies = hclust(dist(t(window_pvals)))
+window_pvals[na_status] = NA
+window_pvals = window_pvals[hc_window_snps$order,]
+window_pvals = window_pvals[,hc_window_studies$order]
 
 # Plot heatmap
 heat = melt(hit_pvals, id="gene")
@@ -162,6 +182,17 @@ g = ggplot(data = heat, aes(x = Var2, y = Var1)) +
 
 ggsave("gwas_tophit_replication.png", width = 8, height = 100, units = "in", dpi = 300, limitsize=FALSE)
 
+# Y-axis labels removed and heatmap highly compressed
+g = ggplot(data = heat, aes(x = Var2, y = Var1)) +
+		geom_tile(aes(fill = value)) +
+		scale_fill_gradient2(low = "white", high = 'orangered4', midpoint = median(heat$value, na.rm=TRUE)) +
+		theme(axis.text.y=element_blank(),
+		      axis.text.x = element_text(angle = 90, hjust = 1)) +
+		labs(x = "Replication GWAS") +
+		labs(y = "Discovery GWAS Hit")
+
+ggsave("gwas_tophit_replication_compressed.png", width = 6, height = 16, units = "in", dpi = 300, limitsize=FALSE)
+
 # Same thing for window-adjusted
 heat = melt(window_pvals, id="gene")
 g = ggplot(data = heat, aes(x = Var2, y = Var1)) +
@@ -173,3 +204,16 @@ g = ggplot(data = heat, aes(x = Var2, y = Var1)) +
 		labs(y = "Discovery GWAS Hit")
 
 ggsave("gwas_window_replication.png", width = 8, height = 100, units = "in", dpi = 300, limitsize=FALSE)
+
+# Y-axis labels removed and heatmap highly compressed
+g = ggplot(data = heat, aes(x = Var2, y = Var1)) +
+		geom_tile(aes(fill = value)) +
+		scale_fill_gradient2(low = "white", high = 'orangered4', midpoint = median(heat$value, na.rm=TRUE)) +
+		theme(axis.text.y=element_blank(),
+		      axis.text.x = element_text(angle = 90, hjust = 1)) +
+		labs(x = "Replication GWAS") +
+		labs(y = "Discovery GWAS Hit")
+
+ggsave("gwas_window_replication_compressed.png", width = 6, height = 16, units = "in", dpi = 300, limitsize=FALSE)
+
+
