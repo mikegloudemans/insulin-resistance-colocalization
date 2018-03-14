@@ -6,6 +6,7 @@ require(ggplot2)
 require(reshape2)
 require(data.table)
 require(ggdendro)
+require(cowplot)
 
 # Noticeably, "HbA1c_MAGIC_Mixed_AllSNPs.txt" is not included in this
 # list of summary stats. That's because its significance values
@@ -33,6 +34,8 @@ sum_stats_files = c("2hrGlu_MAGIC_Europeans_AllSNPs.prepared.txt.gz",
 
 # I'm not sure why we have "MAGIC_ISI_Model_1" and "MAGIC_ISI_Model_2" GWAS,
 # but we don't have top hits ISI1. Probably not a huge concern though.
+# Also, I commented out the files for which we have top hits but no summary statistics,
+# because they mostly just clutter up the plot with empty space.
 hits_files = c("/users/mgloud/projects/insulin_resistance/data/BMI_GIANT_Europeans_Hits_hg19.txt",
 	       "/users/mgloud/projects/insulin_resistance/data/BMI_GIANT_Mixed_Hits_hg19.txt",
 	       "/users/mgloud/projects/insulin_resistance/data/WHRadjBMI_GIANT_Europeans_Hits_hg19.txt",
@@ -41,10 +44,10 @@ hits_files = c("/users/mgloud/projects/insulin_resistance/data/BMI_GIANT_Europea
 	       "/users/mgloud/projects/insulin_resistance/data/2hrGlu_MAGIC_Europeans_Hits_hg19.txt",
 	       "/users/mgloud/projects/insulin_resistance/data/IS_METASTROKE_Mixed_Hits_hg19.txt",
 	       "/users/mgloud/projects/insulin_resistance/data/FastInsu_adjBMI_MAGIC_Europeans_Hits_hg19.txt",
-	       "/users/mgloud/projects/insulin_resistance/data/MI_adjBMI_GENESISGuardian_Mixed_Hits_hg19.txt",
+	       #"/users/mgloud/projects/insulin_resistance/data/MI_adjBMI_GENESISGuardian_Mixed_Hits_hg19.txt",
 	       "/users/mgloud/projects/insulin_resistance/data/FastInsu_MAGIC_Europeans_Hits_hg19.txt",
-	       "/users/mgloud/projects/insulin_resistance/data/HbA1c_MAGIC_Mixed_Hits_hg19.txt",
-	       "/users/mgloud/projects/insulin_resistance/data/MI_GENESISGuardian_Mixed_Hits_hg19.txt",
+	       #"/users/mgloud/projects/insulin_resistance/data/HbA1c_MAGIC_Mixed_Hits_hg19.txt",
+	       #"/users/mgloud/projects/insulin_resistance/data/MI_GENESISGuardian_Mixed_Hits_hg19.txt",
 	       "/users/mgloud/projects/insulin_resistance/data/HDL_GCLC_Mixed_Hits_hg19.txt",
 	       "/users/mgloud/projects/insulin_resistance/data/TG_GCLC_Mixed_Hits_hg19.txt",
 	       "/users/mgloud/projects/insulin_resistance/data/FastGlu_MAGIC_Europeans_Hits_hg19.txt",
@@ -165,12 +168,20 @@ dup_snps = sapply(1:dim(loci)[1], function(x)
 # If SNP isn't on a conventional chromosome, just get rid of it
 dup_snps[is.na(dup_snps)] = TRUE
 
-hit_pvals = hit_pvals[which(!dup_snps),]
-window_pvals = window_pvals[which(!dup_snps),]
-loci = loci[which(!dup_snps),]
+hit_pvals = hit_pvals[!dup_snps,]
+window_pvals = window_pvals[!dup_snps,]
+loci = loci[!dup_snps,]
+
+# I don't think any of the summary stats I was given have the X chromosome,
+# so just remove those SNPs for now
+is_x = loci$chr == "X"
+hit_pvals = hit_pvals[!is_x,]
+window_pvals = window_pvals[!is_x,]
+loci = loci[!is_x,]
+
+# Rename SNPs so that they're not specific to any one single study
 rownames(hit_pvals) = paste(loci$chrom, loci$pos, sep="_")
 rownames(window_pvals) = paste(loci$chrom, loci$pos, sep="_")
-
 
 # Note: This is just for visualization...comparing pvalues from one
 # study to another isn't a rigorous method of comparison, and I'll
@@ -179,6 +190,10 @@ hit_pvals = -log10(hit_pvals)
 hit_pvals = pmin(hit_pvals, 20)	# At a certain point, a hit is a hit 
 window_pvals = -log10(window_pvals)
 window_pvals = pmin(window_pvals, 20)	# At a certain point, a hit is a hit 
+
+# Now, get rid of all SNPs for which p-vals aren't at least 
+# borderline significant in even a single study.
+window_pvals = window_pvals[apply(window_pvals, 1, max, na.rm=TRUE) > 5,]
 
 # Clustering by rows and by columns
 # Reorder matrix for plotting heatmap
@@ -202,19 +217,19 @@ window_pvals = window_pvals[,hc_window_studies$order]
 # to stitch them together manually
 g_hsn_dendro = ggdendrogram(hc_hit_snps) + coord_flip() + scale_y_reverse() + theme_dendro()
 g_hsn_dendro
-ggsave("gwas_tophit_snp_dendro.png", width = 8, height = 100, units = "in", dpi = 300, limitsize=FALSE)
+#ggsave("gwas_tophit_snp_dendro.png", width = 8, height = 100, units = "in", dpi = 300, limitsize=FALSE)
 
 g_hst_dendro = ggdendrogram(hc_hit_studies) + scale_y_reverse() + theme_dendro()
 g_hst_dendro
-ggsave("gwas_tophit_study_dendro.png", width = 8, height = 8, units = "in", dpi = 300, limitsize=FALSE)
+#ggsave("gwas_tophit_study_dendro.png", width = 8, height = 8, units = "in", dpi = 300, limitsize=FALSE)
 
 g_wsn_dendro = ggdendrogram(hc_window_snps) + coord_flip() + scale_y_reverse() + theme_dendro()
 g_wsn_dendro
-ggsave("gwas_window_snp_dendro.png", width = 8, height = 100, units = "in", dpi = 300, limitsize=FALSE)
+#ggsave("gwas_window_snp_dendro.png", width = 8, height = 100, units = "in", dpi = 300, limitsize=FALSE)
 
 g_wst_dendro = ggdendrogram(hc_window_studies) + scale_y_reverse() + theme_dendro()
 g_wst_dendro
-ggsave("gwas_window_study_dendro.png", width = 8, height = 8, units = "in", dpi = 300, limitsize=FALSE)
+#ggsave("gwas_window_study_dendro.png", width = 8, height = 8, units = "in", dpi = 300, limitsize=FALSE)
 
 
 
@@ -228,7 +243,7 @@ g = ggplot(data = heat, aes(x = Var2, y = Var1)) +
 		labs(x = "Replication GWAS") +
 		labs(y = "Discovery GWAS Hit")
 
-ggsave("gwas_tophit_replication.png", width = 8, height = 100, units = "in", dpi = 300, limitsize=FALSE)
+ggsave("gwas_tophit_replication.png", width = 8, height = 50, units = "in", dpi = 300, limitsize=FALSE)
 
 # Y-axis labels removed and heatmap highly compressed
 g = ggplot(data = heat, aes(x = Var2, y = Var1)) +
@@ -251,19 +266,27 @@ g = ggplot(data = heat, aes(x = Var2, y = Var1)) +
 		labs(x = "Replication GWAS") +
 		labs(y = "Discovery GWAS Hit")
 
-ggsave("gwas_window_replication.png", width = 8, height = 100, units = "in", dpi = 300, limitsize=FALSE)
+ggsave("gwas_window_replication.png", width = 8, height = 50, units = "in", dpi = 300, limitsize=FALSE)
 
 # Y-axis labels removed and heatmap highly compressed
 g = ggplot(data = heat, aes(x = Var2, y = Var1)) +
 		geom_tile(aes(fill = value)) +
 		scale_fill_gradient2(low = "white", high = 'orangered4', midpoint = median(heat$value, na.rm=TRUE)) +
 		theme(axis.text.y=element_blank(),
-		      axis.text.x = element_text(angle = 90, hjust = 1)) +
-		labs(x = "Replication GWAS") +
-		labs(y = "Discovery GWAS Hit")
+		      axis.text.x = element_text(angle = 90, hjust = 0, vjust = 0.5),
+		      axis.title.x=element_blank(),
+		      axis.title.y=element_blank())
 
 ggsave("gwas_window_replication_compressed.png", width = 4, height = 10, units = "in", dpi = 300, limitsize=FALSE)
 
+# compressed windows, with dendrograms
+
+combined = ggdraw() + 
+		draw_plot(g, 0.4, 0.2, 0.6, 0.8) +
+		draw_plot(g_wsn_dendro, 0, 0.377, 0.42, 0.65) +
+		draw_plot(g_wst_dendro, 0.395, 0, 0.51, 0.215)
+
+ggsave("gwas_window_replication_compressed_combined.png", width = 8, height = 16, units = "in", dpi = 300, limitsize=FALSE)
 
 
 
