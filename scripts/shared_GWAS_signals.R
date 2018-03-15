@@ -7,6 +7,11 @@ require(reshape2)
 require(data.table)
 require(ggdendro)
 require(cowplot)
+require(parallel)
+
+###
+### Part 1: Plot GWAS comparison heatmap
+###
 
 # Noticeably, "HbA1c_MAGIC_Mixed_AllSNPs.txt" is not included in this
 # list of summary stats. That's because its significance values
@@ -289,4 +294,161 @@ combined = ggdraw() +
 ggsave("gwas_window_replication_compressed_combined.png", width = 8, height = 16, units = "in", dpi = 300, limitsize=FALSE)
 
 
+###
+### Part 2: Plot GTEx eQTL heatmap
+###
+
+eqtl_files = dir("/users/mgloud/projects/brain_gwas/data/eqtls/gtex_v7") 
+eqtl_files = eqtl_files[grep(".gz$", eqtl_files)]
+
+for (window in c(1, 10000))
+{
+	cl <- makeCluster(15)
+	clusterExport(cl, ls())
+	res = parLapply(cl, 1:dim(window_pvals)[1], function(i)
+	{
+		results = rep(0, length(eqtl_files))
+
+		gwas_snp = rownames(window_pvals)[i]
+		
+		chrom = strsplit(gwas_snp, "_")[[1]][1]
+		snp_pos = as.numeric(strsplit(gwas_snp, "_")[[1]][2])
+
+		# Loop through all summary stats files
+		for (j in 1:length(eqtl_files))
+		{
+			tissue_file = eqtl_files[j]
+			
+			# Use tabix to select the part of the file that we need. (within
+			# our window of base pairs from the eQTL)
+			raw = system(paste("tabix ", "/users/mgloud/projects/brain_gwas/data/eqtls/gtex_v7/", tissue_file, " ", chrom, ":", snp_pos-window, "-", snp_pos+window, sep=""), intern=TRUE)
+			tabix_chrs = sapply(strsplit(raw, "\t"), function(x){x[2]})
+			tabix_pos = sapply(strsplit(raw, "\t"), function(x){x[3]})
+			tabix_pvals = as.numeric(sapply(strsplit(raw, "\t"), function(x){x[11]}))
+
+			SNPs = as.data.frame(list(chr=tabix_chrs, snp_pos=tabix_pos, pvalue=tabix_pvals))
+
+			if (length(SNPs$pvalue) == 0)
+			{
+				results[j] = NA
+			} else
+			{
+				results[j] = min(SNPs$pvalue)
+			}
+		}
+
+		# Append status update to file
+		write(paste(i, "\n"),file="../tmp/R_eqtl_status.tmp",append=TRUE)
+
+		return(results)
+	})
+
+	system("rm ../tmp/R_eqtl_status.tmp")
+
+	eqtl_pvals = do.call(rbind, res)
+	rownames(eqtl_pvals) = rownames(window_pvals)
+	colnames(eqtl_pvals) = sapply(strsplit(eqtl_files, "\\."), function(x){x[[1]][1]})
+
+	#save(eqtl_pvals, file="myfile_eqtls.RData")
+
+	#load("myfile_eqtls.RData")
+
+
+	# Note: This is just for visualization...comparing pvalues from one
+	# study to another isn't a rigorous method of comparison, and I'll
+	# have to think carefully about how to make this plot more interpretable.
+	eqtl_pvals = -log10(eqtl_pvals)
+	log_eqtl_pvals = pmin(eqtl_pvals, 30)	# At a certain point, a hit is a hit 
+
+	eqtl_pvals = apply(eqtl_pvals, 2, function(x)
+				 {
+				       x_tweaked = x + runif(length(x), 0, 0.0000001)
+				       breaks = quantile(x_tweaked, probs = seq(0, 1, by=0.05), na.rm=TRUE)
+				       return(as.numeric(cut(x_tweaked, breaks, include.lower=TRUE)))
+				 })
+	rownames(eqtl_pvals) = rownames(window_pvals)
+
+	# Plot heatmap once before clustering, to show same SNP order as
+	# in the GWAS plot
+	heat = melt(log_eqtl_pvals, id="gene")
+	g = ggplot(data = heat, aes(x = Var2, y = Var1)) +
+			geom_tile(aes(fill = value)) +
+			scale_fill_gradient2(low = "white", high = 'orangered4', midpoint = median(heat$value, na.rm=TRUE)) +
+			theme(axis.text.y=element_text(size=7),
+			      axis.text.x = element_text(angle = 90, hjust = 1)) +
+			labs(x = "Replication GWAS") +
+			labs(y = "Discovery GWAS Hit")
+
+	ggsave(paste("eqtl_window", window, "_unclustered_replication.png", sep=""), width = 8, height = 50, units = "in", dpi = 300, limitsize=FALSE)
+
+	heat = melt(eqtl_pvals, id="gene")
+	g = ggplot(data = heat, aes(x = Var2, y = Var1)) +
+			geom_tile(aes(fill = value)) +
+			scale_fill_gradient2(low = "white", high = 'orangered4', midpoint = median(heat$value, na.rm=TRUE)) +
+			theme(axis.text.y=element_text(size=7),
+			      axis.text.x = element_text(angle = 90, hjust = 1)) +
+			labs(x = "Replication GWAS") +
+			labs(y = "Discovery GWAS Hit")
+
+	ggsave(paste("eqtl_window", window, "_unclustered_replication_quantiles.png", sep=""), width = 8, height = 50, units = "in", dpi = 300, limitsize=FALSE)
+
+	# Clustering by rows and by columns
+	# NOTE: Clustering by log p-values is not necessarily the greatest
+	# strategy here; I'm just doing it for convenience.
+	# Then reorder matrix for plotting heatmap
+	na_status = is.na(log_eqtl_pvals)
+	log_eqtl_pvals[na_status] = 0	# For now, let NAs simply mean no association
+	hc_log_eqtl_snps = hclust(dist(log_eqtl_pvals))
+	hc_log_eqtl_studies = hclust(dist(t(log_eqtl_pvals)))
+	log_eqtl_pvals[na_status] = NA
+	log_eqtl_pvals = log_eqtl_pvals[hc_log_eqtl_snps$order,]
+	log_eqtl_pvals = log_eqtl_pvals[,hc_log_eqtl_studies$order]
+
+	# Clustering by rows and by columns
+	na_status = is.na(eqtl_pvals)
+	eqtl_pvals[na_status] = 0	# For now, let NAs simply mean no association
+	hc_eqtl_snps = hclust(dist(eqtl_pvals))
+	hc_eqtl_studies = hclust(dist(t(eqtl_pvals)))
+	eqtl_pvals[na_status] = NA
+	eqtl_pvals = eqtl_pvals[hc_eqtl_snps$order,]
+	eqtl_pvals = eqtl_pvals[,hc_eqtl_studies$order]
+
+
+	g_esnp_dendro = ggdendrogram(hc_eqtl_snps) + coord_flip() + scale_y_reverse() + theme_dendro()
+	g_esnp_dendro
+
+	g_estudy_dendro = ggdendrogram(hc_eqtl_studies) + scale_y_reverse() + theme_dendro()
+	g_estudy_dendro
+
+	g_log_esnp_dendro = ggdendrogram(hc_log_eqtl_snps) + coord_flip() + scale_y_reverse() + theme_dendro()
+	g_log_esnp_dendro
+
+	g_log_estudy_dendro = ggdendrogram(hc_log_eqtl_studies) + scale_y_reverse() + theme_dendro()
+	g_log_estudy_dendro
+
+
+
+	# Plot heatmap
+	heat = melt(eqtl_pvals, id="gene")
+	g = ggplot(data = heat, aes(x = Var2, y = Var1)) +
+			geom_tile(aes(fill = value)) +
+			scale_fill_gradient2(low = "white", high = 'orangered4', midpoint = median(heat$value, na.rm=TRUE)) +
+			theme(axis.text.y=element_text(size=7),
+			      axis.text.x = element_text(angle = 90, hjust = 1)) +
+			labs(x = "Replication GWAS") +
+			labs(y = "Discovery GWAS Hit")
+
+	ggsave(paste("eqtl_window", window, "_replication_quantiles.png", sep=""), width = 8, height = 50, units = "in", dpi = 300, limitsize=FALSE)
+
+	heat = melt(log_eqtl_pvals, id="gene")
+	g = ggplot(data = heat, aes(x = Var2, y = Var1)) +
+			geom_tile(aes(fill = value)) +
+			scale_fill_gradient2(low = "white", high = 'orangered4', midpoint = median(heat$value, na.rm=TRUE)) +
+			theme(axis.text.y=element_text(size=7),
+			      axis.text.x = element_text(angle = 90, hjust = 1)) +
+			labs(x = "Replication GWAS") +
+			labs(y = "Discovery GWAS Hit")
+
+	ggsave(paste("eqtl_window", window, "_replication.png", sep=""), width = 8, height = 50, units = "in", dpi = 300, limitsize=FALSE)
+}
 
