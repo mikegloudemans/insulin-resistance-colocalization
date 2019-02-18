@@ -34,7 +34,8 @@ sum_stats_files = c("/users/mgloud/projects/gwas/data/prepared/2hrGlu_MAGIC_Euro
 		    "/users/mgloud/projects/gwas/data/prepared/T2D_DIAGRAM_European.prepared.txt.gz",
 		    "/users/mgloud/projects/gwas/data/prepared/TG_GCLC_Mixed.prepared.txt.gz",
 		    "/users/mgloud/projects/gwas/data/prepared/WHRadjBMI_GIANT_Europeans_AllSNPs.prepared.txt.gz",
-		    "/users/mgloud/projects/gwas/data/prepared/WHRadjBMI_GIANT_Mixed_AllSNPs.prepared.txt.gz"
+		    "/users/mgloud/projects/gwas/data/prepared/WHRadjBMI_GIANT_Mixed_AllSNPs.prepared.txt.gz",
+		    "/users/mgloud/projects/brain_gwas/data/gwas/schizophrenia/scz2.snp.results.txt.gz"
 		    )
 
 # I'm not sure why we have "MAGIC_ISI_Model_1" and "MAGIC_ISI_Model_2" GWAS,
@@ -57,7 +58,8 @@ hits_files = c("/users/mgloud/projects/insulin_resistance/data/BMI_GIANT_Europea
 	       "/users/mgloud/projects/insulin_resistance/data/TG_GCLC_Mixed_Hits_hg19.txt",
 	       "/users/mgloud/projects/insulin_resistance/data/FastGlu_MAGIC_Europeans_Hits_hg19.txt",
 	       "/users/mgloud/projects/insulin_resistance/data/ISI2_MAGIC_Europeans_Hits_hg19.txt",
-	       "/users/mgloud/projects/insulin_resistance/data/T2D_DIAGRAM_European_Hits_hg19.txt"
+	       "/users/mgloud/projects/insulin_resistance/data/T2D_DIAGRAM_European_Hits_hg19.txt",
+	       "/users/mgloud/projects/insulin_resistance/scripts/snps_with_hg19_positions.txt" # Top ~50 from schizophrenia
 	       )
 
 window = 100000
@@ -303,7 +305,7 @@ eqtl_files = eqtl_files[grep(".gz$", eqtl_files)]
 
 for (window in c(1, 10000))
 {
-	cl <- makeCluster(15)
+	cl <- makeCluster(5)
 	clusterExport(cl, ls())
 	res = parLapply(cl, 1:dim(window_pvals)[1], function(i)
 	{
@@ -349,9 +351,9 @@ for (window in c(1, 10000))
 	rownames(eqtl_pvals) = rownames(window_pvals)
 	colnames(eqtl_pvals) = sapply(strsplit(eqtl_files, "\\."), function(x){x[[1]][1]})
 
-	#save(eqtl_pvals, file="myfile_eqtls.RData")
+	save(eqtl_pvals, file="myfile_eqtls.RData")
 
-	#load("myfile_eqtls.RData")
+	load("myfile_eqtls.RData")
 
 
 	# Note: This is just for visualization...comparing pvalues from one
