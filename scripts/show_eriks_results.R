@@ -5,24 +5,6 @@ require(reshape)
 require(ggplot2)
 require(dplyr)
 
-#
-# Load files
-#
-
-# TODO: Reorganize this to make it all look nice...maybe put it into an RMarkdown file for Bruna to look through...
-
-files = c(
-	  "/users/mgloud/projects/brain_gwas/output/completed/insulin/2018-10-19_13-29-57.409767_insulin_resistance_perturbations_liver_only/BMI_GIANT_Europeans_AllSNPs_prepared_txt_gz_finemap_clpp_status.txt",
-	  "/users/mgloud/projects/brain_gwas/output/completed/insulin/2018-10-19_13-29-57.409767_insulin_resistance_perturbations_liver_only/CHD_CARDIoGRAMplusC4D_Mixed_prepared_txt_gz_finemap_clpp_status.txt",
-	  "/users/mgloud/projects/brain_gwas/output/completed/insulin/2018-10-19_13-29-57.409767_insulin_resistance_perturbations_liver_only/FastGlu_MAGIC_Europeans_AllSNPs_prepared_txt_gz_finemap_clpp_status.txt",
-	  "/users/mgloud/projects/brain_gwas/output/completed/insulin/2018-10-19_13-29-57.409767_insulin_resistance_perturbations_liver_only/FastInsu_adjBMI_MAGIC_Europeans_AllSNPs_prepared_txt_gz_finemap_clpp_status.txt",
-#	  "/users/mgloud/projects/brain_gwas/output/completed/insulin/2018-10-19_13-29-57.409767_insulin_resistance_perturbations_liver_only/GWAS_GENESIS_MI_txt_gz_finemap_clpp_status.txt",
-	  "/users/mgloud/projects/brain_gwas/output/completed/insulin/2018-10-19_13-29-57.409767_insulin_resistance_perturbations_liver_only/HDL_GCLC_Mixed_prepared_txt_gz_finemap_clpp_status.txt",
-	  "/users/mgloud/projects/brain_gwas/output/completed/insulin/2018-10-19_13-29-57.409767_insulin_resistance_perturbations_liver_only/LDL_GCLC_Mixed_prepared_txt_gz_finemap_clpp_status.txt",
-	  "/users/mgloud/projects/brain_gwas/output/completed/insulin/2018-10-19_13-29-57.409767_insulin_resistance_perturbations_liver_only/T2D_DIAGRAM_European_prepared_txt_gz_finemap_clpp_status.txt",
-	  "/users/mgloud/projects/brain_gwas/output/completed/insulin/2018-10-19_13-29-57.409767_insulin_resistance_perturbations_liver_only/TG_GCLC_Mixed_prepared_txt_gz_finemap_clpp_status.txt",
-	  "/users/mgloud/projects/brain_gwas/output/completed/insulin/2018-10-19_13-29-57.409767_insulin_resistance_perturbations_liver_only/WHRadjBMI_GIANT_Mixed_AllSNPs_prepared_txt_gz_finemap_clpp_status.txt"
-	  )
 
 files = c(
 	  "/users/mgloud/projects/brain_gwas/output/completed/insulin/2018-11-05_14-13-28.850594_insulin_resistance_perturbations_full/BMI_GIANT_Europeans_AllSNPs_prepared_txt_gz_finemap_clpp_status.txt",
