@@ -1,23 +1,37 @@
+# Author: Mike Gloudemans
+#
 # Implement Ivan's method for sorting out the test results
 # into various categories
+#
+# 8/1/2019: Generalized it so that the three steps can now be
+# run with arbitrary specifications, outlined in an accompanying
+# config file.
+#
+# TODO: Provide documentation if we're going to distribute this
+# publicly
+#
 
 require(dplyr)
+require(rjson)
+
+config = fromJSON(file = "ir_classification.config")
 
 # Load colocalization results matrix (output from the other
 # QC and preparation script)
 data = read.table("/users/mgloud/projects/insulin_resistance/scripts/classify_results/data/clpp_results_20190401.txt", header=TRUE, sep="\t")
+
 
 # TODO: Make this general and load from a JSON config file
 
 # In the general file, we'll have a field called "exceptions"
 # for this sort of thing, I think
 
-cutoff_gwas_pval = 5e-8
-cutoff_eqtl_pval = 1e-5
-cutoff_snp_count = 20
+cutoff_gwas_pval = as.numeric(config$pre_filters$max_gwas_pval)
+cutoff_eqtl_pval = as.numeric(config$pre_filters$max_eqtl_pval)
+cutoff_snp_count = as.numeric(config$pre_filters$min_snp_count)
 
-strong_clpp_threshold = 0.4
-weak_clpp_threshold = 0.25
+strong_clpp_threshold = as.numeric(config$pre_filters$strong_clpp_threshold)
+weak_clpp_threshold = as.numeric(config$pre_filters$weak_clpp_threshold)
 
 ###################################
 # Part 0: Pre-filtering
@@ -25,15 +39,28 @@ weak_clpp_threshold = 0.25
 
 # Subset down to the ones that meet our initial screening criteria
 
-# Remove all tests not meeting p-value cutoffs (unless specifically
-# allowed to not meet those cutoffs)
-sub = data[((data$min_eqtl_pval < cutoff_eqtl_pval) &		# eQTL significant
-	    (data$min_gwas_pval < cutoff_gwas_pval)) 		# GWAS significant
-		| ((((grepl("MI_adjBMI", data$gwas_trait) 	# Unless it's an exception trait
-		      & data$min_gwas_pval < 1e-5) 
-		| (grepl("ISI", data$gwas_trait) 
-		      & (data$min_gwas_pval < 1e-5))))),]
+# If they pass these p-values, they definitely pass the cut
+eqtl_passing = (data$min_eqtl_pval < cutoff_eqtl_pval)    # eQTL significant
+gwas_passing = (data$min_gwas_pval < cutoff_gwas_pval)    # GWAS significant
 
+# But there are also a few exceptions...
+# These GWAS get a boost
+for (study in names(config$pre_filters$exceptions$gwas))
+{
+	extra_gwas = (grepl(study, data$gwas_trait) &
+		      (data$min_gwas_pval < as.numeric(config$pre_filters$exceptions$gwas[[study]]$max_gwas_pval)))
+	gwas_passing = gwas_passing | extra_gwas
+}
+# These eQTLs get a boost
+for (study in names(config$pre_filters$exceptions$eqtl))
+{
+	extra_eqtl = (grepl(study, data$eqtl_file) &
+		      (data$min_eqtl_pval < as.numeric(config$pre_filters$exceptions$eqtl[[study]]$max_eqtl_pval)))
+	eqtl_passing = eqtl_passing | extra_eqtl
+}
+
+# Now filter down our matrix to those passing all pre-test thresholds.
+sub = data[gwas_passing & eqtl_passing,]
 
 # Remove those not having enough SNPs to pass filters
 sub = sub[sub$n_snps >= cutoff_snp_count,]
@@ -50,44 +77,67 @@ step3_list = rep("", length(loci_list))
 summary = sub %>% group_by(locus, ensembl, hgnc) %>% summarize(colocs=sum(clpp_mod >= strong_clpp_threshold), weak_colocs=sum((clpp_mod >= weak_clpp_threshold) & (clpp_mod < strong_clpp_threshold)))
 coloc_counts = summary %>% group_by(locus) %>% summarize(strong_coloc_genes = sum(colocs > 0), weak_coloc_genes = sum((weak_colocs > 0) & (colocs == 0)), any_coloc_genes=sum((colocs > 0) | (weak_colocs > 0)), candidates=length(ensembl))
 
-# Category 0: Just one candidate, but at least it's colocalized
-loci_0.1 = coloc_counts[(coloc_counts$candidates == 1) & (coloc_counts$strong_coloc_genes == 1),]$locus
-loci_0.2 = coloc_counts[(coloc_counts$candidates == 1) & (coloc_counts$weak_coloc_genes == 1),]$locus
+candidates_equals = function(x, loci, coloc_matrix)
+{
+	return(loci[loci %in% (coloc_matrix[coloc_counts$candidates == x,]$locus)])
+}
+strong_equals = function(x, loci, coloc_matrix)
+{
+	return(loci[loci %in% (coloc_matrix[coloc_counts$strong_coloc_genes == x,]$locus)])
+}
+weak_equals = function(x, loci, coloc_matrix)
+{
+	return(loci[loci %in% (coloc_matrix[coloc_counts$weak_coloc_genes == x,]$locus)])
+}
+candidates_greater_than = function(x, loci, coloc_matrix)
+{
+	return(loci[loci %in% (coloc_matrix[coloc_counts$candidates > x,]$locus)])
+}
+strong_greater_than = function(x, loci, coloc_matrix)
+{
+	return(loci[loci %in% (coloc_matrix[coloc_counts$strong_coloc_genes > x,]$locus)])
+}
+weak_greater_than = function(x, loci, coloc_matrix)
+{
+	return(loci[loci %in% (coloc_matrix[coloc_counts$weak_coloc_genes > x,]$locus)])
+}
 
-# Category 1: One candidate gene, and it doesn't even colocalize
-loci_1 = coloc_counts[(coloc_counts$candidates == 1) & (coloc_counts$weak_coloc_genes == 0) & (coloc_counts$strong_coloc_genes == 0),]$locus
+for (type in names(config$step1_coloc_sorting))
+{
+	pass = 1:max(coloc_counts$locus)
 
-# Category 2: Multiple candidates, now narrowed down to one clear signal
-loci_2 = coloc_counts[(coloc_counts$candidates > 1) & (coloc_counts$strong_coloc_genes == 1),]$locus
+	if ("candidates_equals" %in% names(config$step1_coloc_sorting[[type]][[1]]))
+	{
+		pass = candidates_equals(config$step1_coloc_sorting[[type]][[1]]["candidates_equals"], pass, coloc_counts)
+	}
+	if ("strong_equals" %in% names(config$step1_coloc_sorting[[type]][[1]]))
+	{
+		pass = strong_equals(config$step1_coloc_sorting[[type]][[1]]["strong_equals"], pass, coloc_counts)
+	}
+	if ("weak_equals" %in% names(config$step1_coloc_sorting[[type]][[1]]))
+	{
+		pass = weak_equals(config$step1_coloc_sorting[[type]][[1]]["weak_equals"], pass, coloc_counts)
+	}
+	if ("candidates_greater_than" %in% names(config$step1_coloc_sorting[[type]][[1]]))
+	{
+		pass = candidates_greater_than(config$step1_coloc_sorting[[type]][[1]]["candidates_greater_than"], pass, coloc_counts)
+	}
+	if ("strong_greater_than" %in% names(config$step1_coloc_sorting[[type]][[1]]))
+	{
+		pass = strong_greater_than(config$step1_coloc_sorting[[type]][[1]]["strong_greater_than"], pass, coloc_counts)
+	}
+	if ("weak_greater_than" %in% names(config$step1_coloc_sorting[[type]][[1]]))
+	{
+		pass = weak_greater_than(config$step1_coloc_sorting[[type]][[1]]["weak_greater_than"], pass, coloc_counts)
+	}
+	stopifnot(sum(step1_list[which(loci_list %in% pass)] != "") == 0)
+	step1_list[which(loci_list %in% pass)] = type
+}
 
-# Category 3: Multiple candidates, but more than one strong coloc signal
-loci_3 = coloc_counts[(coloc_counts$candidates > 1) & (coloc_counts$strong_coloc_genes > 1),]$locus
-
-# Category 4: Multiple candidates, any number of weak coloc signals
-loci_4.1 = coloc_counts[(coloc_counts$candidates > 1) & (coloc_counts$strong_coloc_genes == 0) & (coloc_counts$weak_coloc_genes == 1),]$locus
-loci_4.2 = coloc_counts[(coloc_counts$candidates > 1) & (coloc_counts$strong_coloc_genes == 0) & (coloc_counts$weak_coloc_genes > 1),]$locus
-
-# Category 5: Multiple candidates, and none of them colocalize even weakly
-loci_5 = coloc_counts[(coloc_counts$candidates > 1) & (coloc_counts$any_coloc_genes == 0),]$locus
-
-# QC check: each locus should appear once and only once.
-#
-# NOTE: A few loci fell out already due to our thresholding steps,
-# which is okay.
-#
-all_loci = c(loci_0.1, loci_0.2, loci_1, loci_2, loci_3, loci_4.1, loci_4.2, loci_5)
-stopifnot(dim(coloc_counts)[1] == length(all_loci))
-stopifnot(length(table(table(all_loci))) == 1)
-
-step1_list[loci_list %in% loci_0.1] = "0.1"
-step1_list[loci_list %in% loci_0.2] = "0.2"
-step1_list[loci_list %in% loci_1] = "1"
-step1_list[loci_list %in% loci_2] = "2"
-step1_list[loci_list %in% loci_3] = "3"
-step1_list[loci_list %in% loci_4.1] = "4.1"
-step1_list[loci_list %in% loci_4.2] = "4.2"
-step1_list[loci_list %in% loci_5] = "5"
-
+# All loci should belong to a group at this point; if not, the groups are misspecified
+# TODO: Allow for the possibility of "other" group for all not meeting these specs
+stopifnot(sum(step1_list == "") == 0)
+	
 ###################################
 # Part 2: Tissue-specificity
 ###################################
@@ -98,88 +148,92 @@ tissue_coloc = sub %>% group_by(locus, eqtl_file) %>% summarize(has_strong_coloc
 # Make sure all groups have been assigned to exactly one of these classes
 stopifnot(sum(rowSums(tissue_coloc[,3:5]) == 0) == 0)
 
-# Get loci with no colocalization whatsoever, in any tissue
+strong = tissue_coloc[tissue_coloc$has_strong_coloc == 1,] 
+strong_loci = unique(strong$locus)
+strong_classes = sapply(strong_loci, function(x)
+       {
+		tissues = strong[strong$locus == x,]$eqtl_file
+       		# Test whether the colocalized tissues match some
+       		# tissue group of interest
+		
+       		for (type in names(config$step2_tissue_sorting))
+		{
+       			if(sum(!(config$step2_tissue_sorting[[type]] %in% tissues)) + sum(!(tissues %in% config$step2_tissue_sorting[[type]])) == 0)
+			{
+				return(type)
+			}
+		}
+
+		# If not, it still does have at least one coloc,
+		# so doesn't belong in the "None" category
+		return("Other")
+       })
+step2_list[which(loci_list %in% strong_loci)] = strong_classes
+
+# Then check weak colocs
+weak = tissue_coloc[tissue_coloc$has_weak_only == 1,]
+weak_loci = unique(weak$locus)
+# We only care about weak colocs if there aren't strong colocs
+weak_loci = weak_loci[!(weak_loci %in% strong_loci)]
+weak_classes = sapply(weak_loci, function(x)
+       {
+		tissues = weak[weak$locus == x,]$eqtl_file
+       		# Test whether the colocalized tissues match some
+       		# tissue group of interest
+		
+       		for (type in names(config$step2_tissue_sorting))
+		{
+       			if(sum(!(config$step2_tissue_sorting[[type]] %in% tissues)) + sum(!(tissues %in% config$step2_tissue_sorting[[type]])) == 0)
+			{
+				return(type)
+			}
+		}
+
+		# If not, it still does have at least one coloc,
+		# so doesn't belong in the "None" category
+		return("Other")
+       })
+step2_list[which(loci_list %in% weak_loci)] = weak_classes
+
+# Finally, the rest should have no colocs at all
+# Make sure these loci actually have no colocs, then tag them
 coloc_by_locus = tissue_coloc %>% group_by(locus) %>% summarize(total_coloc = sum(has_strong_coloc + has_weak_only) == 0)
-loci_non_coloc = coloc_by_locus$locus[coloc_by_locus$total_coloc]
-# Make sure this group includes the ones from groups 1 and 5 above
-stopifnot(sum(loci_non_coloc %in% c(loci_1, loci_5) == 0) == 0)
-stopifnot(sum(c(loci_1, loci_5) %in% loci_non_coloc == 0) == 0)
+stopifnot(sum(!(step2_list[which(loci_list %in% coloc_by_locus$locus[coloc_by_locus$total_coloc])] == "")) == 0)
+step2_list[which(loci_list %in% coloc_by_locus$locus[coloc_by_locus$total_coloc])] = "None"
 
-# First, let's just get the loci that have coloc in multiple tissues
-strong_tissue_coloc = tissue_coloc[tissue_coloc$has_strong_coloc == 1,]
-weak_tissue_coloc = tissue_coloc[tissue_coloc$has_weak_only == 1,]
-
-strong_tissue_counts = strong_tissue_coloc %>% group_by(locus) %>% summarize(how_many = length(has_strong_coloc))
-weak_tissue_counts = weak_tissue_coloc %>% group_by(locus) %>% summarize(how_many = length(has_weak_only))
-
-loci_shared = c(strong_tissue_counts$locus[strong_tissue_counts$how_many > 1], weak_tissue_counts$locus[(weak_tissue_counts$how_many > 1) & !(weak_tissue_counts$locus %in% strong_tissue_counts$locus)])
-
-adps_strong = strong_tissue_coloc$locus[strong_tissue_coloc$eqtl_file == "Adipose_Subcutaneous"]
-adps_weak = weak_tissue_coloc$locus[weak_tissue_coloc$eqtl_file == "Adipose_Subcutaneous"]
-loci_adps = c(adps_strong[!adps_strong %in% loci_shared], adps_weak[!adps_weak %in% c(loci_shared, strong_tissue_counts$locus)])
-
-adpv_strong = strong_tissue_coloc$locus[strong_tissue_coloc$eqtl_file == "Adipose_Visceral_Omentum"]
-adpv_weak = weak_tissue_coloc$locus[weak_tissue_coloc$eqtl_file == "Adipose_Visceral_Omentum"]
-loci_adpv = c(adpv_strong[!adpv_strong %in% loci_shared], adpv_weak[!adpv_weak %in% c(loci_shared, strong_tissue_counts$locus)])
-
-musk_strong = strong_tissue_coloc$locus[strong_tissue_coloc$eqtl_file == "Muscle_Skeletal"]
-musk_weak = weak_tissue_coloc$locus[weak_tissue_coloc$eqtl_file == "Muscle_Skeletal"]
-loci_musk = c(musk_strong[!musk_strong %in% loci_shared], musk_weak[!musk_weak %in% c(loci_shared, strong_tissue_counts$locus)])
-
-liver_strong = strong_tissue_coloc$locus[strong_tissue_coloc$eqtl_file == "Liver"]
-liver_weak = weak_tissue_coloc$locus[weak_tissue_coloc$eqtl_file == "Liver"]
-loci_liver = c(liver_strong[!liver_strong %in% loci_shared], liver_weak[!liver_weak %in% c(loci_shared, strong_tissue_counts$locus)])
-
-# Then there's one other special case for adipose...
-adp_all = c(adps_strong[adps_strong %in% adpv_strong], adps_weak[(adps_weak %in% adpv_weak) & !(adps_weak %in% strong_tissue_counts$locus)])
-loci_adp_both = adp_all[!(adp_all %in% loci_shared)]
-# Adjust the other two adps groups to remove this one...
-loci_adps = loci_adps[!(loci_adps %in% loci_adp_both)]
-loci_adpv = loci_adpv[!(loci_adpv %in% loci_adp_both)]
-
-# Quality check results; make sure everything's been classified
-all_loci = c(loci_shared, loci_adps, loci_adpv, loci_musk, loci_liver, loci_adp_both, loci_non_coloc)
-stopifnot(dim(coloc_counts)[1] == length(all_loci))
-stopifnot(length(table(table(all_loci))) == 1)
-
-step2_list[loci_list %in% loci_adps] = "Adps"
-step2_list[loci_list %in% loci_adpv] = "Adpv"
-step2_list[loci_list %in% loci_adp_both] = "Adp_Both"
-step2_list[loci_list %in% loci_musk] = "Musk"
-step2_list[loci_list %in% loci_liver] = "Liver"
-step2_list[loci_list %in% loci_shared] = "shared"
-step2_list[loci_list %in% loci_non_coloc] = "none"
+# Just make sure every site's been assigned now
+stopifnot(sum(step2_list == "") == 0)
 
 ###################################
-# Part 3: Specific to this study
+# Part 3: Which GWAS matter most?
 ###################################
 
 top_colocs = sub %>% group_by(locus, gwas_trait) %>% summarize(best = max(clpp_mod))
-loci_gwas1 = unique(top_colocs[top_colocs$gwas_trait %in% c("ISI_Model_2_AgeSexBMI", "MI_adjBMI") & (top_colocs$best > weak_clpp_threshold),]$locus)
 
-loci_gwas2 = unique(top_colocs[top_colocs$gwas_trait %in% c("FastGlu", "FastInsu_adjBMI", "T2D") & (top_colocs$best > weak_clpp_threshold),]$locus)
-loci_gwas2 = loci_gwas2[!loci_gwas2 %in% loci_gwas1]
+# Tag colocalized loci by priority level
+gwas_cumul_loci = c()
+for (i in 1:length(config$step3_gwas_sorting))
+{
+	gwas_loci = unique(top_colocs[(top_colocs$gwas_trait %in% config$step3_gwas_sorting[[i]][["traits"]]) & (top_colocs$best > weak_clpp_threshold),]$locus)
+	gwas_loci = gwas_loci[!(gwas_loci %in% gwas_cumul_loci)]
+	step3_list[which(loci_list %in% gwas_loci)] = config$step3_gwas_sorting[[i]][["name"]]
 
-loci_gwas3 = unique(top_colocs[top_colocs$gwas_trait %in% c("WHRadjBMI") & (top_colocs$best > weak_clpp_threshold),]$locus)
-loci_gwas3 = loci_gwas3[!loci_gwas3 %in% c(loci_gwas1, loci_gwas2)]
+	gwas_cumul_loci = c(gwas_cumul_loci, gwas_loci)
+}
 
-loci_gwas4 = unique(top_colocs[top_colocs$gwas_trait %in% c("TG", "BMI", "HDL") & (top_colocs$best > weak_clpp_threshold),]$locus)
-loci_gwas4 = loci_gwas4[!loci_gwas4 %in% c(loci_gwas1, loci_gwas2, loci_gwas3)]
+# The remainder of colocalizing loci will be tagged as "other".
+# This only matters if we have traits that are in none of the tiers.
+loci_other = top_colocs[top_colocs$best > weak_clpp_threshold,]$locus
+loci_other = loci_other[!(loci_other %in% gwas_cumul_loci)]
+step3_list[which(loci_list %in% loci_other)] = "Other"
 
-# These ones are here, but they don't really matter in this analysis because of the whole CHD aspect...will need to
-# go back to that original matrix
-loci_chd_dont_care = unique(top_colocs[top_colocs$gwas_trait %in% c("CHD") & (top_colocs$best > weak_clpp_threshold),]$locus)
-loci_chd_dont_care = loci_chd_dont_care[!loci_chd_dont_care %in% c(loci_gwas1, loci_gwas2, loci_gwas3, loci_gwas4)]
+# Make sure all the remaining loci don't actually have any colocalization whatsoever
+# (as computed for step 2 of prioritization)
+stopifnot(sum(!(step3_list[which(loci_list %in% coloc_by_locus$locus[coloc_by_locus$total_coloc])] == "")) == 0)
+step3_list[which(loci_list %in% coloc_by_locus$locus[coloc_by_locus$total_coloc])] = "None"
+# Now just make sure all have been tagged
+stopifnot(sum(step3_list == "") == 0)
 
-all_loci = c(loci_non_coloc, loci_gwas1, loci_gwas2, loci_gwas3, loci_gwas4, loci_chd_dont_care)
-stopifnot(dim(coloc_counts)[1] == length(all_loci))
-stopifnot(length(table(table(all_loci))) == 1)
-
-step3_list[loci_list %in% loci_gwas1] = "Tier1"
-step3_list[loci_list %in% loci_gwas2] = "Tier2"
-step3_list[loci_list %in% loci_gwas3] = "Tier3"
-step3_list[loci_list %in% loci_gwas4] = "Tier4"
-step3_list[loci_list %in% loci_non_coloc] = "none"
 
 ####### Put all the results together ########
 
