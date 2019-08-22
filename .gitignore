@@ -1,0 +1,14 @@
+*.txt
+*.html
+*nohup.out
+eriks_grant/plots
+eriks_grant/results
+data
+*.pdf
+output
+trash
+tmp
+static
+*.RData
+*.txt.gz
+*.png
