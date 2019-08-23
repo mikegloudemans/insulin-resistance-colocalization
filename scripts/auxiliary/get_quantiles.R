@@ -1,3 +1,6 @@
+## Get quantiles of CLPP and CLPP-mod scores, so that
+## we have a better idea of what a given cutoff means
+
 require(qvalue)
 
 results = read.csv("/users/mgloud/projects/insulin_resistance/output/full_coloc_results_qced.txt", sep=",")
