@@ -1,3 +1,7 @@
+### I think this code has been superseded by some better code
+# that Bruna has written now
+
+
 # Author: Mike Gloudemans
 # Date: 2/2/2018
 

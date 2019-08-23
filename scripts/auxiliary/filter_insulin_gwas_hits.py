@@ -1,3 +1,6 @@
+# 08/2019 -- I can't remember what the point of this was before, but I don't really think it's
+# useful anymore
+
 import operator
 
 # Load aill GWAS p-values
