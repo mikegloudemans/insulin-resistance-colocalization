@@ -20,15 +20,17 @@ We select the traits we are interested in. We originally load
 all traits but then subset down to these.
 
 ```{r include=FALSE}
-kept_traits = c("/users/mgloud/projects/insulin_resistance/data/gwas/formatted/brunas_sumstats/GWAS_FastInsu_adjBMI_MAGIC_Europeans.txt.gz",
-                "/users/mgloud/projects/insulin_resistance/data/gwas/formatted/brunas_sumstats/GWAS_FastGlu_MAGIC_Europeans.txt.gz",
-                "/users/mgloud/projects/insulin_resistance/data/gwas/formatted/brunas_sumstats/GWAS_MAGIC_ISI_Model_2_AgeSexBMI.txt.txt.gz",
-                "/users/mgloud/projects/insulin_resistance/data/gwas/formatted/brunas_sumstats/GWAS_BMI_GIANT_Europeans.txt.gz",
-                "/users/mgloud/projects/insulin_resistance/data/gwas/formatted/brunas_sumstats/GWAS_WHRadjBMI_GIANT_Europeans.txt.gz",
-                "/users/mgloud/projects/insulin_resistance/data/gwas/formatted/bonus_sumstats/GWAS_T2D_DIAGRAM_European.txt.gz",
-                "/users/mgloud/projects/insulin_resistance/data/gwas/formatted/brunas_sumstats/GWAS_TG_GCLC_Mixed.txt.gz",
-                "/users/mgloud/projects/insulin_resistance/data/gwas/formatted/brunas_sumstats/GWAS_HDL_GCLC_Mixed.txt.gz",
-                "/users/mgloud/projects/insulin_resistance/data/gwas/formatted/bonus_sumstats/GWAS_MI_adjBMI.txt.gz")
+kept_traits = c("/users/mgloud/projects/insulin_resistance/data/gwas/formatted/sumstats/BMI_GIANT_2018/BMI_GIANT_2018.txt.gz",
+		"/users/mgloud/projects/insulin_resistance/data/gwas/formatted/sumstats/FastGlu_MAGIC_Europeans/FastGlu_MAGIC_Europeans.txt.gz",
+		"/users/mgloud/projects/insulin_resistance/data/gwas/formatted/sumstats/FastInsu_adjBMI_MAGIC_Europeans/FastInsu_adjBMI_MAGIC_Europeans.txt.gz",
+		"/users/mgloud/projects/insulin_resistance/data/gwas/formatted/sumstats/HDL_GLGC_Expanded/HDL_GLGC_Expanded.txt.gz",
+		"/users/mgloud/projects/insulin_resistance/data/gwas/formatted/sumstats/TG_GLGC_Expanded/TG_GLGC_Expanded.txt.gz",
+		"/users/mgloud/projects/insulin_resistance/data/gwas/formatted/sumstats/MI_adjBMI/MI_adjBMI.txt.gz",
+		"/users/mgloud/projects/insulin_resistance/data/gwas/formatted/sumstats/MAGIC_ISI_Model_2_AgeSexBMI.txt/MAGIC_ISI_Model_2_AgeSexBMI.txt.txt.gz",
+		"/users/mgloud/projects/insulin_resistance/data/gwas/formatted/sumstats/T2D_Mahajan_Europeans/T2D_Mahajan_Europeans.txt.gz",
+		"/users/mgloud/projects/insulin_resistance/data/gwas/formatted/sumstats/WHR-adj-BMI_GIANT_2018/WHR-adj-BMI_GIANT_2018.txt.gz")
+gwas_snp_list = "/users/mgloud/projects/insulin_resistance/output/test_snps/ir-v8_all-gwas_gwas-pval1e-05_gwas-window500000_snps-considered.txt"
+coloc_out_dir = "/users/mgloud/projects/brain_gwas/output/ir-v8/"
 
 # For including in RMarkdown
 
@@ -60,8 +62,9 @@ inclusion criterion for this list).
 ### Get number of unique GWAS lead SNPs.
 
 ```{r}
-all_gwas_snps = read.table("/users/mgloud/projects/insulin_resistance/output/snps_considered.txt", col.names=c("chr", "snp.pos", "pvalue", "trait", "gwas_file"))
+all_gwas_snps = read.table(gwas_snp_list, col.names=c("chr", "snp.pos", "pvalue", "trait", "gwas_file"), fill=TRUE, skip=1)
 all_gwas_snps = all_gwas_snps[all_gwas_snps$gwas_file %in% kept_traits,]
+all_gwas_snps = all_gwas_snps[(all_gwas_snps$pvalue <= 5e-8) | (all_gwas_snps$pvalue <= 1e-5 & (grepl("ISI", all_gwas_snps$trait) | (grepl("MI_adj", all_gwas_snps$trait)))),]
 all_gwas_snps$ref_snp = paste(all_gwas_snps$chr, all_gwas_snps$snp.pos, sep="_")
 length(unique(all_gwas_snps$ref_snp))
 write.table(all_gwas_snps, file="/users/mgloud/projects/insulin_resistance/output/all_gwas_snps.txt", quote=FALSE, col.names=TRUE, row.names=FALSE, sep="\t")
@@ -124,7 +127,7 @@ so no SNPs that shouldn't be tested will slip through this step.
 
 
 ```{r}
-all_snp_gene_pairs = read.table("/users/mgloud/projects/insulin_resistance/output/snp_gene_pairs_considered.txt", col.names=c("chr", "snp.pos", "pvalue", "trait", "gwas_file", "feature", "eqtl_file"))
+all_snp_gene_pairs = read.table("/users/mgloud/projects/insulin_resistance/output/test_snps/ir-v8_all-gwas_gtex-ir_gwas-pval1e-05_eqtl-pval1e-05_gwas-window500000_eqtl-window0_snp-gene-pairs-considered.txt", col.names=c("chr", "snp.pos", "gwas_pvalue", "trait", "eqtl_pvalue", "gwas_file", "feature", "eqtl_file"), skip=1)
 all_snp_gene_pairs = all_snp_gene_pairs[all_snp_gene_pairs$gwas_file %in% kept_traits,]
 all_snp_gene_pairs$ref_snp = paste(all_snp_gene_pairs$chr, all_snp_gene_pairs$snp.pos, sep="_")
 all_snp_gene_pairs$locus = group_to_loci(all_snp_gene_pairs$ref_snp)
@@ -145,7 +148,7 @@ Once more, after filtering, SNPs will only be in this list if they were signific
 at least one of the GWAS we care about.
 
 ```{r}
-testable_snps = read.table("/users/mgloud/projects/insulin_resistance/output/snps_to_test.txt", header=TRUE)
+testable_snps = read.table("/users/mgloud/projects/insulin_resistance/output/test_snps/ir-v8_all-gwas_gtex-ir_gwas-pval1e-05_eqtl-pval1e-05_gwas-window500000_eqtl-window0_coloc-tests.txt", header=TRUE)
 testable_snps = testable_snps[testable_snps$gwas_file %in% kept_traits,]
 testable_snps$ref_snp = paste(testable_snps$chr, testable_snps$snp_pos, sep="_")
 testable_snps$locus = group_to_loci(testable_snps$ref_snp)
@@ -155,7 +158,7 @@ print(length(unique(testable_snps$ref_snp)))
 # Number of testable loci after filtering:
 print(length(unique(testable_snps$locus)))
 # Number of testable genes after filtering:
-print(length(unique(testable_snps$gene)))
+print(length(unique(testable_snps$feature)))
 # Number of unique SNP-gene pairs to test after filtering:
 length(unique(paste(testable_snps$ref_snp, testable_snps$feature, sep="_")))
 # Number of unique locus-gene pairs to test after filtering
@@ -185,31 +188,31 @@ print(dropped_hits_per_trait)
 
 ```{r include=FALSE}
 # Load all files into R for analysis
-folders = dir("/users/mgloud/projects/brain_gwas/output/insulin-full-analysis-rerun/")
+folders = dir(coloc_out_dir)
 tabs = list()
 err_tab = list()
 skip_tab = list()
 i = 1
 for (folder in folders)
 {
-	files = dir(paste0("/users/mgloud/projects/brain_gwas/output/insulin-full-analysis-rerun/", folder))
+	files = dir(paste0(coloc_out_dir, folder))
 	error = files[grep("ERROR", files)]
 	skip = files[grep("skip", files)]
 	files = files[grep("clpp" ,files)]
 	
 	if (length(error) > 0)
 	{
-		err_tab[[i]] = read.table(paste("/users/mgloud/projects/brain_gwas/output/insulin-full-analysis-rerun", folder, error, sep="/"), header=FALSE, sep="\t", fill=TRUE, col.names = c("gwas_file", "eqtl_file", "snp.chrom", "snp.pos", "restrict_gene", "trait", "error", "error2"))
+		err_tab[[i]] = read.table(paste(coloc_out_dir, folder, error, sep="/"), header=FALSE, sep="\t", fill=TRUE, col.names = c("gwas_file", "eqtl_file", "snp.chrom", "snp.pos", "restrict_gene", "trait", "error", "error2"))
 		err_tab[[i]]$error = paste(err_tab[[i]]$error, err_tab[[i]]$error2, sep="|")
 	}
 	if (length(skip) > 0)
 	{
-		skip_tab[[i]] = read.table(paste("/users/mgloud/projects/brain_gwas/output/insulin-full-analysis-rerun", folder, skip, sep="/"), header=FALSE, sep="\t", fill=TRUE, col.names = c("gwas_file", "eqtl_file", "snp.chrom", "snp.pos", "feature", "error", "gwas_data"))
+		skip_tab[[i]] = read.table(paste(coloc_out_dir, folder, skip, sep="/"), header=FALSE, sep="\t", fill=TRUE, col.names = c("gwas_file", "eqtl_file", "snp.chrom", "snp.pos", "feature", "error", "gwas_data"))
 	}
 
 	for (file in files)
 	{
-		tabs[[i]] = read.table(paste("/users/mgloud/projects/brain_gwas/output/insulin-full-analysis-rerun", folder, file, sep="/"), header=TRUE)
+		tabs[[i]] = read.table(paste(coloc_out_dir, folder, file, sep="/"), header=TRUE)
 		i = i + 1
 	}
 }
@@ -220,23 +223,22 @@ skips = do.call(rbind, skip_tab)
 
 # A bit of stuff just for more understandable labels
 results$ensembl = sapply(as.character(results$feature), function(x) {strsplit(x, "\\.")[[1]][1]})
-results$gwas_trait = gsub(".prepared.txt.gz", "", results$gwas_trait)
-results$gwas_trait = gsub("_Mixed", "", results$gwas_trait)
-results$gwas_trait = gsub("_Europeans", "", results$gwas_trait)
-results$gwas_trait = gsub("_European", "", results$gwas_trait)
-results$gwas_trait = gsub("_AllSNPs", "", results$gwas_trait)
-results$gwas_trait = gsub("_MAGIC", "", results$gwas_trait)
-results$gwas_trait = gsub("_GCLC", "", results$gwas_trait)
-results$gwas_trait = gsub("_DIAGRAM", "", results$gwas_trait)
-results$gwas_trait = gsub("_GIANT", "", results$gwas_trait)
-results$gwas_trait = gsub("_CARDIoGRAMplusC4D", "", results$gwas_trait)
-results$gwas_trait = gsub(".txt", "", results$gwas_trait)
-results$gwas_trait = gsub("/users/mgloud/projects/gwas/data/prepared/", "", results$gwas_trait)
-results$gwas_trait = gsub("/users/mgloud/projects/gwas/data/GENESIS/formatted/", "", results$gwas_trait)
-results$gwas_trait = gsub("GWAS_", "", results$gwas_trait)
-results$gwas_trait = gsub(".txt.gz", "", results$gwas_trait)
+#results$gwas_trait = gsub(".prepared.txt.gz", "", results$gwas_trait)
+#results$gwas_trait = gsub("_Mixed", "", results$gwas_trait)
+#results$gwas_trait = gsub("_Europeans", "", results$gwas_trait)
+#results$gwas_trait = gsub("_European", "", results$gwas_trait)
+#results$gwas_trait = gsub("_AllSNPs", "", results$gwas_trait)
+#results$gwas_trait = gsub("_MAGIC", "", results$gwas_trait)
+#results$gwas_trait = gsub("_GCLC", "", results$gwas_trait)
+#results$gwas_trait = gsub("_DIAGRAM", "", results$gwas_trait)
+#results$gwas_trait = gsub("_GIANT", "", results$gwas_trait)
+#results$gwas_trait = gsub("_CARDIoGRAMplusC4D", "", results$gwas_trait)
 results$gwas_trait = gsub(".gz", "", results$gwas_trait)
-results$eqtl_file = gsub("_allpairs_txt_gz", "", results$eqtl_file)
+results$gwas_trait = gsub(".txt", "", results$gwas_trait)
+#results$gwas_trait = gsub("/users/mgloud/projects/gwas/data/prepared/", "", results$gwas_trait)
+#results$gwas_trait = gsub("/users/mgloud/projects/gwas/data/GENESIS/formatted/", "", results$gwas_trait)
+#results$gwas_trait = gsub("GWAS_", "", results$gwas_trait)
+results$eqtl_file = gsub("_txt_gz", "", results$eqtl_file)
 
 # Filter down to the ones that are in kept traits list
 results = results[results$base_gwas_file %in% kept_sub,]
@@ -419,6 +421,6 @@ missing_pairs$reason_missing = sapply(1:dim(missing_pairs)[1], function(i)
 
        })
 
-write.csv(missing_pairs[c("ref_snp", "feature", "reason_missing")], file="/users/mgloud/projects/insulin_resistance/output/all_missing_pairs_explained.txt", quote=FALSE, sep="\t", col.names=TRUE, row.names=FALSE)
-write.csv(results, file="/users/mgloud/projects/insulin_resistance/output/full_coloc_results_qced.txt", quote=FALSE, sep="\t", col.names=TRUE, row.names=FALSE)
+write.table(missing_pairs[c("ref_snp", "feature", "reason_missing")], file="/users/mgloud/projects/insulin_resistance/output/all_missing_pairs_explained.txt", quote=FALSE, sep="\t", col.names=TRUE, row.names=FALSE)
+write.table(results, file="/users/mgloud/projects/insulin_resistance/output/full_coloc_results_qced.txt", quote=FALSE, sep="\t", col.names=TRUE, row.names=FALSE)
 ```
