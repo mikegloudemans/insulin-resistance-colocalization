@@ -29,6 +29,10 @@ kept_traits = c("/users/mgloud/projects/insulin_resistance/data/gwas/formatted/s
 		"/users/mgloud/projects/insulin_resistance/data/gwas/formatted/sumstats/MAGIC_ISI_Model_2_AgeSexBMI.txt/MAGIC_ISI_Model_2_AgeSexBMI.txt.txt.gz",
 		"/users/mgloud/projects/insulin_resistance/data/gwas/formatted/sumstats/T2D_Mahajan_Europeans/T2D_Mahajan_Europeans.txt.gz",
 		"/users/mgloud/projects/insulin_resistance/data/gwas/formatted/sumstats/WHR-adj-BMI_GIANT_2018/WHR-adj-BMI_GIANT_2018.txt.gz")
+kept_eqtls = c("/users/mgloud/projects/brain_gwas/data/eqtls/gtex_v8/Liver.allpairs.txt.gz.eQTLs.txt.gz",
+	       "/users/mgloud/projects/brain_gwas/data/eqtls/gtex_v8/Adipose_Visceral_Omentum.allpairs.txt.gz.eQTLs.txt.gz",
+	       "/users/mgloud/projects/brain_gwas/data/eqtls/gtex_v8/Adipose_Subcutaneous.allpairs.txt.gz.eQTLs.txt.gz",
+	       "/users/mgloud/projects/brain_gwas/data/eqtls/gtex_v8/Muscle_Skeletal.allpairs.txt.gz.eQTLs.txt.gz")
 gwas_snp_list = "/users/mgloud/projects/insulin_resistance/output/test_snps/ir-v8_all-gwas_gwas-pval1e-05_gwas-window500000_snps-considered.txt"
 coloc_out_dir = "/users/mgloud/projects/brain_gwas/output/ir-v8/"
 
@@ -45,7 +49,12 @@ print(trait_list)
 
 
 ```{r include=FALSE}
-kept_sub = sapply(kept_traits, function(x)
+kept_gwas_sub = sapply(kept_traits, function(x)
+	{
+		all = strsplit(x, "/")[[1]]
+		trait = gsub("\\.", "_", all[length(all)])
+	})
+kept_eqtl_sub = sapply(kept_eqtls, function(x)
 	{
 		all = strsplit(x, "/")[[1]]
 		trait = gsub("\\.", "_", all[length(all)])
@@ -129,7 +138,9 @@ so no SNPs that shouldn't be tested will slip through this step.
 ```{r}
 all_snp_gene_pairs = read.table("/users/mgloud/projects/insulin_resistance/output/test_snps/ir-v8_all-gwas_gtex-ir_gwas-pval1e-05_eqtl-pval1e-05_gwas-window500000_eqtl-window0_snp-gene-pairs-considered.txt", col.names=c("chr", "snp.pos", "gwas_pvalue", "trait", "eqtl_pvalue", "gwas_file", "feature", "eqtl_file"), skip=1)
 all_snp_gene_pairs = all_snp_gene_pairs[all_snp_gene_pairs$gwas_file %in% kept_traits,]
+all_snp_gene_pairs = all_snp_gene_pairs[all_snp_gene_pairs$eqtl_file %in% kept_eqtls,]
 all_snp_gene_pairs$ref_snp = paste(all_snp_gene_pairs$chr, all_snp_gene_pairs$snp.pos, sep="_")
+all_snp_gene_pairs = all_snp_gene_pairs[all_snp_gene_pairs$ref_snp %in% unique(all_gwas_snps$ref_snp),]	# Because some might not pass the latest cutoffs
 all_snp_gene_pairs$locus = group_to_loci(all_snp_gene_pairs$ref_snp)
 # Total number of unique genes to test
 length(unique(all_snp_gene_pairs$feature))
@@ -150,7 +161,9 @@ at least one of the GWAS we care about.
 ```{r}
 testable_snps = read.table("/users/mgloud/projects/insulin_resistance/output/test_snps/ir-v8_all-gwas_gtex-ir_gwas-pval1e-05_eqtl-pval1e-05_gwas-window500000_eqtl-window0_coloc-tests.txt", header=TRUE)
 testable_snps = testable_snps[testable_snps$gwas_file %in% kept_traits,]
+testable_snps = testable_snps[testable_snps$eqtl_file %in% kept_eqtls,]
 testable_snps$ref_snp = paste(testable_snps$chr, testable_snps$snp_pos, sep="_")
+testable_snps = testable_snps[testable_snps$ref_snp %in% unique(all_gwas_snps$ref_snp),]	# Because some might not pass the latest cutoffs
 testable_snps$locus = group_to_loci(testable_snps$ref_snp)
 testable_snps$trait = sapply(as.character(testable_snps$trait), function(x) {s=strsplit(x, "/"); return(s[[1]][length(s[[1]])])})
 # Number of testable SNPs after filtering with eQTLs:
@@ -221,6 +234,15 @@ results = do.call(rbind, tabs)
 errors = do.call(rbind, err_tab)
 skips = do.call(rbind, skip_tab)
 
+# Filter down to the ones that are in kept traits list
+#results = results[results$base_gwas_file %in% kept_sub,]
+results = results[results$base_gwas_file %in% kept_gwas_sub,]
+results = results[results$eqtl_file %in% kept_eqtl_sub,]
+errors = errors[errors$gwas_file %in% kept_traits,]
+errors = errors[errors$eqtl_file %in% kept_eqtls,]
+skips = skips[skips$gwas_file %in% kept_traits,]
+skips = skips[skips$eqtl_file %in% kept_eqtls,]
+
 # A bit of stuff just for more understandable labels
 results$ensembl = sapply(as.character(results$feature), function(x) {strsplit(x, "\\.")[[1]][1]})
 #results$gwas_trait = gsub(".prepared.txt.gz", "", results$gwas_trait)
@@ -240,9 +262,8 @@ results$gwas_trait = gsub(".txt", "", results$gwas_trait)
 #results$gwas_trait = gsub("GWAS_", "", results$gwas_trait)
 results$eqtl_file = gsub("_txt_gz", "", results$eqtl_file)
 
-# Filter down to the ones that are in kept traits list
-results = results[results$base_gwas_file %in% kept_sub,]
-
+# These ones are dropped because they may have been included at first, but
+# didn't pass our final GWAS / eQTL significance thresholds.
 results = results[results$ref_snp %in% unique(all_gwas_snps$ref_snp),]
 dim(results)
 ```
@@ -326,13 +347,14 @@ insignificant_gwas = best_pvals[best_pvals$best_gwas_pval < -log10(5*10^(-8)),]
 # If the SNP was significant in MI or in ISI, then we allow it as long as it passes best_gwas_pval < 10^(-6).
 insignificant_gwas$allowed = sapply(1:dim(insignificant_gwas)[1], function(i)
 {
-	if (insignificant_gwas$best_gwas_pval[i] < 6)
+	if (insignificant_gwas$best_gwas_pval[i] < 5)
 	{
 		return(FALSE)
 	}
 	ref = insignificant_gwas$ref_snp[i]
 	feature = insignificant_gwas$feature[i]
-	return(sum(grepl("_ISI_|_MI", all_gwas_snps[all_gwas_snps$ref_snp == ref,]$trait)) > 0)
+	# TODO: This is really buggy allowing exceptions like this. FIX IT
+	return(sum(grepl("_ISI_|/MI", all_gwas_snps[all_gwas_snps$ref_snp == ref,]$trait)) > 0)
 })
 insignificant_gwas = insignificant_gwas[!insignificant_gwas$allowed,]
 

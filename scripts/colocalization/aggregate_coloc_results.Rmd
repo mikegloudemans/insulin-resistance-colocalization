@@ -28,7 +28,7 @@ summary statistics.
 ### Load filtered and QC'ed COLOC results from the previous script.
 
 ```{r}
-results = read.csv("/users/mgloud/projects/insulin_resistance/output/full_coloc_results_qced.txt", sep=",")
+results = read.table("/users/mgloud/projects/insulin_resistance/output/full_coloc_results_qced.txt", sep="\t", header=TRUE)
 results$chr = sapply(as.character(results$ref_snp), function(x) {strsplit(x, "_")[[1]][1]})
 results$pos = sapply(as.character(results$ref_snp), function(x) {strsplit(x, "_")[[1]][2]})
 ```
@@ -38,7 +38,7 @@ data output format.
 
 ```{r include}
 # Get HGNC gene names
-genes = read.table("/users/mgloud/projects/brain_gwas/scripts/auxiliary/eriks_grant/mart_export.txt", header=TRUE, sep="\t")
+genes = read.table("/users/mgloud/projects/insulin_resistance/scripts/auxiliary/eriks_bonus/eriks_grant/mart_export.txt", header=TRUE, sep="\t")
 genes = genes[,-2]
 names(genes) = c("ensembl", "hgnc")
 genes = genes[!duplicated(genes$ensembl),]
@@ -50,8 +50,7 @@ rsids$rsid = sapply(1:dim(rsids)[1], function(i)
 	{
 		chr = rsids$chr[i]
 		pos = rsids$pos[i]
-
-		query = system(paste0("tabix /mnt/lab_data/montgomery/shared/1KG/ALL.chr", chr, ".phase3_shapeit2_mvncall_integrated_v5a.20130502.genotypes.vcf.gz ", chr, ":", pos, "-", pos), intern=TRUE)
+		query = system(paste0("tabix /mnt/lab_data/montgomery/shared/1KG/hg38/ALL.chr", chr, "_GRCh38.genotypes.20170504.vcf.gz ", chr, ":", pos, "-", pos), intern=TRUE)
 		if (length(query) > 1)
 		{
 			vars = sapply(1:length(query), function(i) {strsplit(query[[i]], "\\t")[[1]][3]})
@@ -73,11 +72,13 @@ rsids$rsid = sapply(1:dim(rsids)[1], function(i)
 )
 results = merge(rsids[c("ref_snp", "rsid")], results, by="ref_snp")
 
-ensembl_locs = read_delim("/srv/scratch/restricted/rare_diseases/data/annot/gencode.v19.annotation.genes.bed.gz", delim="\t", col_names=FALSE)
-colnames(ensembl_locs) = c("chrom", "gene_start", "gene_end", "feature")
+# I got rid of this for now because I changed it to be for hg38 instead. Really though, I should adapt this
+# code to work for both
+#ensembl_locs = read_delim("/srv/scratch/restricted/rare_diseases/data/annot/gencode.v19.annotation.genes.bed.gz", delim="\t", col_names=FALSE)
+#colnames(ensembl_locs) = c("chrom", "gene_start", "gene_end", "feature")
 
-results$gene_start = ensembl_locs[match(results$feature, ensembl_locs$feature),]$gene_start
-results$gene_end = ensembl_locs[match(results$feature, ensembl_locs$feature),]$gene_end
+#results$gene_start = ensembl_locs[match(results$feature, ensembl_locs$feature),]$gene_start
+#results$gene_end = ensembl_locs[match(results$feature, ensembl_locs$feature),]$gene_end
 
 
 results$min_gwas_pval = 10^-(results$X.log_gwas_pval)
@@ -102,8 +103,9 @@ sub[order(as.character(sub$ref_snp)),][c("ref_snp", "locus")]
 ### Output our results file for further in-depth analysis
 
 ```{r}
-results_output = results[c("rsid", "chr", "pos", "locus", "min_gwas_pval", "min_eqtl_pval", "gwas_trait", "eqtl_file", "ensembl", "hgnc", "gene_start", "gene_end", "clpp", "clpp_mod", "n_snps", "all_sig_gwas", "all_sig_eqtl")]
-write.table(results_output, "/users/mgloud/projects/insulin_resistance/output/clpp_results.txt", quote=FALSE, col.names=TRUE, row.names=FALSE, sep="\t")
+#results_output = results[c("rsid", "chr", "pos", "locus", "min_gwas_pval", "min_eqtl_pval", "gwas_trait", "eqtl_file", "ensembl", "hgnc", "gene_start", "gene_end", "clpp", "clpp_mod", "n_snps", "all_sig_gwas", "all_sig_eqtl")]
+results_output = results[c("rsid", "chr", "pos", "locus", "min_gwas_pval", "min_eqtl_pval", "gwas_trait", "eqtl_file", "ensembl", "hgnc", "clpp", "clpp_mod", "n_snps", "all_sig_gwas", "all_sig_eqtl")]
+write.table(results_output, "/users/mgloud/projects/insulin_resistance/output/clpp_results_2019-09-09.txt", quote=FALSE, col.names=TRUE, row.names=FALSE, sep="\t")
 ```
 
 # Compare CLPP and CLPP-mod scores

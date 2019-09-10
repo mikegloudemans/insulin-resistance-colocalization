@@ -14,17 +14,11 @@
 require(dplyr)
 require(rjson)
 
-config = fromJSON(file = "ir_classification.config")
+config = fromJSON(file = "/users/mgloud/projects/insulin_resistance/scripts/classify_results/ir_classification_2019-09-08.config")
 
 # Load colocalization results matrix (output from the other
 # QC and preparation script)
-data = read.table("/users/mgloud/projects/insulin_resistance/scripts/classify_results/data/clpp_results_20190401.txt", header=TRUE, sep="\t")
-
-
-# TODO: Make this general and load from a JSON config file
-
-# In the general file, we'll have a field called "exceptions"
-# for this sort of thing, I think
+data = read.table(config$input_results_file, header=TRUE, sep="\t")
 
 cutoff_gwas_pval = as.numeric(config$pre_filters$max_gwas_pval)
 cutoff_eqtl_pval = as.numeric(config$pre_filters$max_eqtl_pval)
@@ -238,5 +232,17 @@ stopifnot(sum(step3_list == "") == 0)
 ####### Put all the results together ########
 
 classes = data.frame(list(locus=loci_list, step1=step1_list, step2=step2_list, step3=step3_list))
-write.table(classes, file="coloc_classification.txt", quote=FALSE, row.names=FALSE, col.names=TRUE, sep="\t")
+write.table(classes, file=config$out_file, quote=FALSE, row.names=FALSE, col.names=TRUE, sep="\t")
+
+
+results_summaries = list()
+results_summaries$step1 = classes %>% group_by(step1) %>% summarize(length(locus))
+results_summaries$step2 = classes %>% group_by(step2) %>% summarize(length(locus))
+results_summaries$step3 = classes %>% group_by(step3) %>% summarize(length(locus))
+
+
+file.remove(file=config$summary_out_file)
+lapply(results_summaries, function(x) {write.table( data.frame(x), file=config$summary_out_file, append= T, sep='\t', quote=FALSE, row.names=FALSE, col.names=TRUE); write("\n\n",file=config$summary_out_file, append=TRUE)})
+#write.table(results_summaries, file=config$summary_out_file, quote=FALSE, row.names=FALSE, col.names=TRUE, sep="\t")
+
 
