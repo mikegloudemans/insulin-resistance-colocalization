@@ -14,6 +14,7 @@ require(reshape2)
 require(ggplot2)
 require(dplyr)
 require(readr)
+require(rjson)
 ```
 
 # Format colocalization results table
@@ -28,7 +29,10 @@ summary statistics.
 ### Load filtered and QC'ed COLOC results from the previous script.
 
 ```{r}
-results = read.table("/users/mgloud/projects/insulin_resistance/output/full_coloc_results_qced.txt", sep="\t", header=TRUE)
+# Config file should be specified in the script that renders this file
+config = fromJSON(file=config_file)
+
+results = read.table(paste(config$out_dir, "full_coloc_results_qced.txt", sep="/"), sep="\t", header=TRUE)
 results$chr = sapply(as.character(results$ref_snp), function(x) {strsplit(x, "_")[[1]][1]})
 results$pos = sapply(as.character(results$ref_snp), function(x) {strsplit(x, "_")[[1]][2]})
 ```
@@ -104,199 +108,10 @@ sub[order(as.character(sub$ref_snp)),][c("ref_snp", "locus")]
 
 ```{r}
 #results_output = results[c("rsid", "chr", "pos", "locus", "min_gwas_pval", "min_eqtl_pval", "gwas_trait", "eqtl_file", "ensembl", "hgnc", "gene_start", "gene_end", "clpp", "clpp_mod", "n_snps", "all_sig_gwas", "all_sig_eqtl")]
-results_output = results[c("rsid", "chr", "pos", "locus", "min_gwas_pval", "min_eqtl_pval", "gwas_trait", "eqtl_file", "ensembl", "hgnc", "clpp", "clpp_mod", "n_snps", "all_sig_gwas", "all_sig_eqtl")]
-write.table(results_output, "/users/mgloud/projects/insulin_resistance/output/clpp_results_2019-09-09.txt", quote=FALSE, col.names=TRUE, row.names=FALSE, sep="\t")
+results_output = results[c("rsid", "chr", "pos", "locus", "min_gwas_pval", "min_eqtl_pval", "gwas_short", "eqtl_short", "gwas_trait", "eqtl_file", "feature", "ensembl", "hgnc", "clpp", "clpp_mod", "n_snps", "all_sig_gwas", "all_sig_eqtl", "base_gwas_file")]
+write.table(results_output, paste0(config$out_dir, "/clpp_results_", config$analysis_date, ".txt"), quote=FALSE, col.names=TRUE, row.names=FALSE, sep="\t")
 ```
 
-# Compare CLPP and CLPP-mod scores
+Note: There used to be additional analysis at the end of this script, but I deleted it because most if not all of it has been superseded
+by other, superior analyses. To find it again, I'd have to look on the Github repository.
 
-```{r}
-sub = results[results$X.log_gwas_pval, results$X.log_gwas_pval]
-
-# Ranked
-plot(rank(results$clpp), rank(results$clpp_mod))
-# Ranked filtered
-plot(rank(results$clpp), rank(results$clpp_mod))
-
-# Absolute
-plot(results$clpp, results$clpp_mod)
-
-# Ranked absolute
-
-```
-
-# Visualize results using heatmaps
-
-```{r}
-# Initalize a 3D CLPP array of tissue x gene x gwas_trait
-# Maybe initialize another indicator array to show which ones meet all the cutoffs (could then remove slices with no results meeting the cutoffs)
-tissues = unique(results$eqtl_file)
-genes = unique(results$feature)
-gwas_traits = unique(results$gwas_trait)
-
-#min_clpp = 0.001
-min_clpp = 0
-clpp = array(min_clpp, dim = c(length(tissues), length(genes), length(gwas_traits)))
-
-dimnames(clpp)[[1]] = tissues
-dimnames(clpp)[[2]] = genes
-dimnames(clpp)[[3]] = gwas_traits
-
-# Fill the array
-for (i in 1:dim(clpp)[1])
-{
-	for (j in 1:dim(clpp)[2])
-	{
-		for (k in 1:dim(clpp)[3])
-		{
-			clpp[i,j,k] = max(results[(results$eqtl_file == tissues[i]) & (results$feature == genes[j]) & (results$gwas_trait == gwas_traits[k]),]$clpp_mod, clpp[i,j,k])
-		}
-	}
-}
-
-clpp = clpp[,apply(clpp, 2, max) >= 0.3,]
-
-
-# Cluster the array within each plane
-# May need to read a bit about how to do this and how to choose correlation parameters...but don't waste too much time on it
-# TODO: (I'll skip it for now, just focus on consistency)
-
-# Plot it in interesting ways? For now though just do layered heatmaps, one for each tissue
-# (Actually, would be nice to be able to view all 3 possible slice orientations)
-
-# Make one plot for each tissue
-for (i in 1:dim(clpp)[1])
-{
-	tissue = tissues[i]
-
-	my_matrix = as.data.frame(as.matrix(clpp[i,,]))
-	my_matrix$gene = rownames(my_matrix)
-
-	# Plot heatmap
-	heat = melt(my_matrix)
-	heat$plot_vals = heat$value
-	heat$binned_vals = NA
-	heat$binned_vals[heat$plot_vals <= 1] = 8
-	heat$binned_vals[heat$plot_vals < 0.9] = 7
-	heat$binned_vals[heat$plot_vals < 0.8] = 6
-	heat$binned_vals[heat$plot_vals < 0.7] = 5
-	heat$binned_vals[heat$plot_vals < 0.6] = 4
-	heat$binned_vals[heat$plot_vals < 0.5] = 3
-	heat$binned_vals[heat$plot_vals < 0.4] = 2
-	heat$binned_vals[heat$plot_vals < 0.3] = 1
-
-	heat$binned_vals = as.factor(heat$binned_vals)
-	
-	heat$gene = factor(heat$gene, levels=unique(heat$gene))
-	heat$variable = factor(heat$variable, levels=unique(heat$variable))
-
-	heat$strike = ""
-	heat$strike[is.na(heat$binned_vals)] = "X"
-	heat$binned_vals[is.na(heat$binned_vals)] = 1
-
-	g = ggplot(data = heat, aes(x = variable, y = gene)) +
-			geom_tile(aes(fill = binned_vals), color="grey80", size=0.5) +
-			scale_fill_manual(drop=FALSE, values=colorRampPalette(c("white","red"))(8), name="CLPP_mod", labels = c("0-0.3", "0.3-0.4", "0.4-0.5", "0.5-0.6", "0.6-0.7", "0.7-0.8", "0.8-0.9", "0.9-1"),na.value = "white") +
-			theme(axis.text.y=element_text(size=10),
-			axis.text.x = element_text(angle = 90, hjust = 1)) +
-			labs(y = "Nearest Gene --> Colocalized Gene") +
-			labs(x = "GWAS Trait") + 
-			geom_text(label=heat$strike, size=4, color="red", alpha=0.4)
-
-	ggsave(paste0("/users/mgloud/projects/insulin_resistance/output/new/insulin_", tissue, "_full_clpp.png"), width = 8, height = 30, units = "in", dpi = 300, limitsize=FALSE)
-}
-
-
-# Make one plot for each gene
-for (i in 1:dim(clpp)[2])
-{
-	gene = genes[i]
-
-	my_matrix = as.data.frame(as.matrix(clpp[,i,]))
-	my_matrix$tissue = rownames(my_matrix)
-
-	# Plot heatmap
-	heat = melt(my_matrix)
-	heat$plot_vals = heat$value
-	heat$binned_vals = NA
-	heat$binned_vals[heat$plot_vals <= 1] = 8
-	heat$binned_vals[heat$plot_vals < 0.9] = 7
-	heat$binned_vals[heat$plot_vals < 0.8] = 6
-	heat$binned_vals[heat$plot_vals < 0.7] = 5
-	heat$binned_vals[heat$plot_vals < 0.6] = 4
-	heat$binned_vals[heat$plot_vals < 0.5] = 3
-	heat$binned_vals[heat$plot_vals < 0.4] = 2
-	heat$binned_vals[heat$plot_vals < 0.3] = 1
-
-	heat$binned_vals = as.factor(heat$binned_vals)
-	
-	heat$tissue = factor(heat$tissue, levels=unique(heat$tissue))
-	heat$variable = factor(heat$variable, levels=unique(heat$variable))
-
-	heat$strike = ""
-	heat$strike[is.na(heat$binned_vals)] = "X"
-	heat$binned_vals[is.na(heat$binned_vals)] = 1
-
-	g = ggplot(data = heat, aes(x = variable, y = tissue)) +
-			geom_tile(aes(fill = binned_vals), color="grey80", size=0.5) +
-			scale_fill_manual(drop=FALSE, values=colorRampPalette(c("white","red"))(8), name="CLPP_mod", labels = c("0-0.3", "0.3-0.4", "0.4-0.5", "0.5-0.6", "0.6-0.7", "0.7-0.8", "0.8-0.9", "0.9-1"),na.value = "white") +
-			theme(axis.text.y=element_text(size=10),
-			axis.text.x = element_text(angle = 90, hjust = 1)) +
-			labs(y = "Tissue") +
-			labs(x = "GWAS Trait") + 
-			geom_text(label=heat$strike, size=4, color="red", alpha=0.4)
-
-	ggsave(paste0("/users/mgloud/projects/insulin_resistance/output/new/insulin_", gene, "_full_clpp.png"), width = 8, height = 30, units = "in", dpi = 300, limitsize=FALSE)
-}
-
-
-# Make one plot for each GWAS
-for (i in 1:dim(clpp)[3])
-{
-	gwas= gwas_traits[i]
-
-	my_matrix = as.data.frame(t(as.matrix(clpp[,,i])))
-	my_matrix$gene = rownames(my_matrix)
-
-	# Plot heatmap
-	heat = melt(my_matrix)
-	heat$plot_vals = heat$value
-	heat$binned_vals = NA
-	heat$binned_vals[heat$plot_vals <= 1] = 8
-	heat$binned_vals[heat$plot_vals < 0.9] = 7
-	heat$binned_vals[heat$plot_vals < 0.8] = 6
-	heat$binned_vals[heat$plot_vals < 0.7] = 5
-	heat$binned_vals[heat$plot_vals < 0.6] = 4
-	heat$binned_vals[heat$plot_vals < 0.5] = 3
-	heat$binned_vals[heat$plot_vals < 0.4] = 2
-	heat$binned_vals[heat$plot_vals < 0.3] = 1
-
-	heat$binned_vals = as.factor(heat$binned_vals)
-	
-	heat$gene = factor(heat$gene, levels=unique(heat$gene))
-	heat$variable = factor(heat$variable, levels=unique(heat$variable))
-
-	heat$strike = ""
-	heat$strike[is.na(heat$binned_vals)] = "X"
-	heat$binned_vals[is.na(heat$binned_vals)] = 1
-
-	g = ggplot(data = heat, aes(x = variable, y = gene)) +
-			geom_tile(aes(fill = binned_vals), color="grey80", size=0.5) +
-			scale_fill_manual(drop=FALSE, values=colorRampPalette(c("white","red"))(8), name="CLPP_mod", labels = c("0-0.3", "0.3-0.4", "0.4-0.5", "0.5-0.6", "0.6-0.7", "0.7-0.8", "0.8-0.9", "0.9-1"),na.value = "white") +
-			theme(axis.text.y=element_text(size=10),
-			axis.text.x = element_text(angle = 90, hjust = 1)) +
-			labs(y = "Gene") +
-			labs(x = "Tissue") + 
-			geom_text(label=heat$strike, size=4, color="red", alpha=0.4)
-
-	ggsave(paste0("/users/mgloud/projects/insulin_resistance/output/new/insulin_", gwas, "_full_clpp.png"), width = 8, height = 30, units = "in", dpi = 300, limitsize=FALSE)
-}
-
-
-stopifnot(FALSE)
-
-
-# Use 3D heatmap vis? We'll see, this isn't top priority right now.
-# A good long-term goal
-
-```

@@ -14,7 +14,10 @@
 require(dplyr)
 require(rjson)
 
-config = fromJSON(file = "/users/mgloud/projects/insulin_resistance/scripts/classify_results/ir_classification_2019-09-08.config")
+args = commandArgs(trailingOnly=TRUE)
+config_file = args[1]
+
+config = fromJSON(file = config_file)
 
 # Load colocalization results matrix (output from the other
 # QC and preparation script)
@@ -41,14 +44,14 @@ gwas_passing = (data$min_gwas_pval < cutoff_gwas_pval)    # GWAS significant
 # These GWAS get a boost
 for (study in names(config$pre_filters$exceptions$gwas))
 {
-	extra_gwas = (grepl(study, data$gwas_trait) &
+	extra_gwas = (grepl(study, data$base_gwas_file) &
 		      (data$min_gwas_pval < as.numeric(config$pre_filters$exceptions$gwas[[study]]$max_gwas_pval)))
 	gwas_passing = gwas_passing | extra_gwas
 }
 # These eQTLs get a boost
 for (study in names(config$pre_filters$exceptions$eqtl))
 {
-	extra_eqtl = (grepl(study, data$eqtl_file) &
+	extra_eqtl = (grepl(study, data$base_gwas_file) &
 		      (data$min_eqtl_pval < as.numeric(config$pre_filters$exceptions$eqtl[[study]]$max_eqtl_pval)))
 	eqtl_passing = eqtl_passing | extra_eqtl
 }
@@ -202,13 +205,13 @@ stopifnot(sum(step2_list == "") == 0)
 # Part 3: Which GWAS matter most?
 ###################################
 
-top_colocs = sub %>% group_by(locus, gwas_trait) %>% summarize(best = max(clpp_mod))
+top_colocs = sub %>% group_by(locus, base_gwas_file) %>% summarize(best = max(clpp_mod))
 
 # Tag colocalized loci by priority level
 gwas_cumul_loci = c()
 for (i in 1:length(config$step3_gwas_sorting))
 {
-	gwas_loci = unique(top_colocs[(top_colocs$gwas_trait %in% config$step3_gwas_sorting[[i]][["traits"]]) & (top_colocs$best > weak_clpp_threshold),]$locus)
+	gwas_loci = unique(top_colocs[(top_colocs$base_gwas_file %in% config$step3_gwas_sorting[[i]][["traits"]]) & (top_colocs$best > weak_clpp_threshold),]$locus)
 	gwas_loci = gwas_loci[!(gwas_loci %in% gwas_cumul_loci)]
 	step3_list[which(loci_list %in% gwas_loci)] = config$step3_gwas_sorting[[i]][["name"]]
 
@@ -243,6 +246,5 @@ results_summaries$step3 = classes %>% group_by(step3) %>% summarize(length(locus
 
 file.remove(file=config$summary_out_file)
 lapply(results_summaries, function(x) {write.table( data.frame(x), file=config$summary_out_file, append= T, sep='\t', quote=FALSE, row.names=FALSE, col.names=TRUE); write("\n\n",file=config$summary_out_file, append=TRUE)})
-#write.table(results_summaries, file=config$summary_out_file, quote=FALSE, row.names=FALSE, col.names=TRUE, sep="\t")
 
 
