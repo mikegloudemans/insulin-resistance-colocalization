@@ -229,6 +229,10 @@ results = do.call(rbind, tabs)
 errors = do.call(rbind, err_tab)
 skips = do.call(rbind, skip_tab)
 
+# It's possible will have exact duplicates if the traits weren't run all at once.
+# I fix this here.
+results = results[!duplicated(results),]
+
 # Rename GWAS and eQTL files for complete consistency
 # I don't like this solution for the long term, but
 # since we're dealing with files that don't have the info we
@@ -460,3 +464,5 @@ if (FALSE)
 }
 write.table(results, file=paste(config$out_dir, "full_coloc_results_qced.txt", sep="/"), quote=FALSE, sep="\t", col.names=TRUE, row.names=FALSE)
 ```
+
+

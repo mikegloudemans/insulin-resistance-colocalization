@@ -247,4 +247,9 @@ results_summaries$step3 = classes %>% group_by(step3) %>% summarize(length(locus
 file.remove(file=config$summary_out_file)
 lapply(results_summaries, function(x) {write.table( data.frame(x), file=config$summary_out_file, append= T, sep='\t', quote=FALSE, row.names=FALSE, col.names=TRUE); write("\n\n",file=config$summary_out_file, append=TRUE)})
 
+# Add classifications to the original data frame and rewrite it to a file.
+
+data_extended = full_join(data, classes)
+
+write.table(data_extended, file=gsub( "clpp_results_", "clpp_results_categorized_", config$input_results_file), sep='\t', quote=FALSE, row.names=FALSE, col.names=TRUE)
 
