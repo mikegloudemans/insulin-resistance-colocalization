@@ -6,12 +6,12 @@ import time
 
 def main():
     # Reset things fresh on each run, so we're not mixing results
-    subprocess.call("rm -rf /users/mgloud/projects/brain_gwas/output/ir-v8/*", shell=True)
+    subprocess.call("rm -rf /users/mgloud/projects/brain_gwas/output/ir-mi-only-v8/*", shell=True)
     subprocess.call("rm -rf /users/mgloud/projects/insulin_resistance/tmp", shell=True)
     subprocess.call("mkdir /users/mgloud/projects/insulin_resistance/tmp", shell=True)
 
     kept_data = []
-    with open("/users/mgloud/projects/insulin_resistance/output/test_snps/ir-v8_all-gwas_gtex-ir_gwas-pval1e-05_eqtl-pval1e-05_gwas-window500000_eqtl-window0_coloc-tests.txt") as f:
+    with open("/users/mgloud/projects/insulin_resistance/output/test_snps/ir-mi-only-v8_all-gwas_gtex-ir_gwas-pval1e-05_eqtl-pval1e-05_gwas-window500000_eqtl-window0_coloc-tests.txt") as f:
         all_data = []
         f.readline()
         for line in f:
@@ -47,7 +47,7 @@ def main():
         # Run the test
         subprocess.call("python /users/mgloud/projects/brain_gwas/scripts/dispatch.py /users/mgloud/projects/insulin_resistance/tmp/ir_config{0}.config 1 &".format(i), shell=True)
 
-        while int(subprocess.check_output('''ps -ef | grep "python /users/mgloud/projects/brain_gwas/scripts/dispatch.py /users/mgloud/projects/insulin_resistance/tmp/ir_config" | wc -l''', shell=True)) > 20:
+        while int(subprocess.check_output('''ps -ef | grep "python /users/mgloud/projects/brain_gwas/scripts/dispatch.py /users/mgloud/projects/insulin_resistance/tmp/ir_config" | wc -l''', shell=True)) > 2:
             time.sleep(1)
 
     # Clean up
@@ -56,7 +56,7 @@ def main():
 
 template = '''
 {
-        "out_dir_group": "ir-v8",
+        "out_dir_group": "ir-mi-only-v8",
 
        "gwas_experiments": 
 	{

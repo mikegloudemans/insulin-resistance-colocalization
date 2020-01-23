@@ -17,6 +17,8 @@ require(rjson)
 args = commandArgs(trailingOnly=TRUE)
 config_file = args[1]
 
+# TODO: The way I'm currently specifying the date of file creation is atrocious.
+# Fix this to make it clean. 
 config = fromJSON(file = config_file)
 
 # Load colocalization results matrix (output from the other
@@ -244,8 +246,9 @@ results_summaries$step2 = classes %>% group_by(step2) %>% summarize(length(locus
 results_summaries$step3 = classes %>% group_by(step3) %>% summarize(length(locus))
 
 
-file.remove(file=config$summary_out_file)
-lapply(results_summaries, function(x) {write.table( data.frame(x), file=config$summary_out_file, append= T, sep='\t', quote=FALSE, row.names=FALSE, col.names=TRUE); write("\n\n",file=config$summary_out_file, append=TRUE)})
+# Remove this file if it already exists
+suppressWarnings(file.remove(file=config$summary_out_file))
+suppressWarnings(lapply(results_summaries, function(x) {write.table( data.frame(x), file=config$summary_out_file, append= T, sep='\t', quote=FALSE, row.names=FALSE, col.names=TRUE); write("\n\n",file=config$summary_out_file, append=TRUE)}))
 
 # Add classifications to the original data frame and rewrite it to a file.
 
