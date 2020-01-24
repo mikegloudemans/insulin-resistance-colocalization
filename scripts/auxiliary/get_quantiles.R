@@ -3,7 +3,8 @@
 
 require(qvalue)
 
-results = read.csv("/users/mgloud/projects/insulin_resistance/output/full_coloc_results_qced.txt", sep=",")
+# TODO: Fix path
+results = read.csv("output/full_coloc_results_qced.txt", sep=",")
 results$gwas_p = 10^(-results$X.log_gwas_pval)
 results$eqtl_p = 10^(-results$X.log_eqtl_pval)
 

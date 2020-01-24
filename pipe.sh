@@ -42,3 +42,14 @@ Rscript scripts/colocalization/render_output.R scripts/colocalization/sqtls_only
 Rscript /users/mgloud/projects/insulin_resistance/scripts/classify_results/classify_results.R /users/mgloud/projects/insulin_resistance/scripts/classify_results/ir_classification_sqtls_2019-09-08.config
 # Bin coloc results into different categories of loci
 # based on Ivan's method
+
+#########################################################################
+### Additional analysis and checks that were used but not explicitly
+### necessary to generate the main results
+#########################################################################
+
+# Estimating a typical CLPP or CLPP-mod score at various quantiles
+scripts/auxiliary/get_quantiles.R
+
+
+

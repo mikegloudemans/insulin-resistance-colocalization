@@ -1,1 +1,0 @@
-cat <(head -n 1 /users/mgloud/projects/insulin_resistance/output/chd/clpp_results.txt) <(awk '{if ($7 == "CHD") print $0}' /users/mgloud/projects/insulin_resistance/output/chd/clpp_results.txt) > /users/mgloud/projects/insulin_resistance/output/chd/clpp_results_cad_only.tsv
