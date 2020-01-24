@@ -2,13 +2,15 @@
 # There shouldn't be many differences.
 # For the differences that exist, is there a reasonable explanation?
 
+require(dplyr)
+
 pre_run_coloc = read.table("/users/mgloud/projects/insulin_resistance/output/test_snps/ir-v8_all-gwas_gtex-ir_gwas-pval1e-05_eqtl-pval1e-05_gwas-window500000_eqtl-window0_coloc-tests.txt", header = TRUE)
 post_run_coloc = read.table("/users/mgloud/projects/insulin_resistance/output/post_coloc/eqtls_only/full_coloc_results_qced.txt", header =TRUE)
 
 pre_run_coloc$test_id = paste(pre_run_coloc$chr, pre_run_coloc$snp_pos, pre_run_coloc$eqtl_file, pre_run_coloc$gwas_file, pre_run_coloc$feature, sep="_")
 post_run_coloc$test_id = paste(post_run_coloc$ref_snp, post_run_coloc$eqtl_file, post_run_coloc$base_gwas_file, post_run_coloc$feature, sep="_")
 
-# Make this more general at some point
+# TODO: Make this more general at some point
 pre_run_coloc = pre_run_coloc[!grepl("2hr", pre_run_coloc$gwas_file),]
 pre_run_coloc = pre_run_coloc[(grepl("ISI_Model_", pre_run_coloc$gwas_file) | grepl("MI_adjBMI_", pre_run_coloc$gwas_file) | (pre_run_coloc$gwas_pvalue < 5e-8)),]
 
@@ -17,8 +19,17 @@ sum(!(pre_run_coloc$test_id %in% post_run_coloc$test_id))
 
 rejected_tests = pre_run_coloc[!(pre_run_coloc$test_id %in% post_run_coloc$test_id),]
 
+# Make sure the range of GWAS p-values for each type of test is reasonable
 
-# A few other QC checks
+# Visual inspection:
+# Each GWAS should have a reasonable number of tested SNPs.
+# The range of SNP pvalues for each GWAS and eQTL study should match the specified cutoffs
+gwas_stats = post_run_coloc %>% group_by(base_gwas_file) %>% summarize(total_snps=length(unique(ref_snp)), gwas_range=paste(round(range(X.log_gwas_pval),2), collapse="..."), eqtl_range = paste(round(range(X.log_eqtl_pval),2), collapse="..."))
+print(gwas_stats)
+
+# Same as above, just grouped by eQTLs instead of GWAS
+eqtl_stats = post_run_coloc %>% group_by(eqtl_file) %>% summarize(total_snps=length(unique(ref_snp)), gwas_range=paste(round(range(X.log_gwas_pval),2), collapse="..."), eqtl_range = paste(round(range(X.log_eqtl_pval),2), collapse="..."))
+print(eqtl_stats)
 
 # We shouldn't see many sites with < 50 or so SNPs. We shouldn't really see any
 # with < 10 SNPs; if we do, we need to toss these sites at an earlier step in the
