@@ -111,7 +111,3 @@ sub[order(as.character(sub$ref_snp)),][c("ref_snp", "locus")]
 results_output = results[c("rsid", "chr", "pos", "locus", "min_gwas_pval", "min_eqtl_pval", "gwas_short", "eqtl_short", "gwas_trait", "eqtl_file", "feature", "ensembl", "hgnc", "clpp", "clpp_mod", "n_snps", "all_sig_gwas", "all_sig_eqtl", "base_gwas_file")]
 write.table(results_output, paste0(config$out_dir, "/clpp_results_", config$analysis_date, ".txt"), quote=FALSE, col.names=TRUE, row.names=FALSE, sep="\t")
 ```
-
-Note: There used to be additional analysis at the end of this script, but I deleted it because most if not all of it has been superseded
-by other, superior analyses. To find it again, I'd have to look on the Github repository.
-

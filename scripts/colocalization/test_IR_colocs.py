@@ -6,12 +6,12 @@ import time
 
 def main():
     # Reset things fresh on each run, so we're not mixing results
-    subprocess.call("rm -rf /users/mgloud/projects/brain_gwas/output/ir-v8/*", shell=True)
-    subprocess.call("rm -rf /users/mgloud/projects/insulin_resistance/tmp", shell=True)
-    subprocess.call("mkdir /users/mgloud/projects/insulin_resistance/tmp", shell=True)
+    subprocess.call("rm -rf output/colocalization/raw/ir-v8/*", shell=True)
+    subprocess.call("rm -rf tmp", shell=True)
+    subprocess.call("mkdir tmp", shell=True)
 
     kept_data = []
-    with open("/users/mgloud/projects/insulin_resistance/output/test_snps/ir-v8_all-gwas_gtex-ir_gwas-pval1e-05_eqtl-pval1e-05_gwas-window500000_eqtl-window0_coloc-tests.txt") as f:
+    with open("output/test_snps/ir-v8/ir-v8_all-gwas_gtex-ir_gwas-pval1e-05_eqtl-pval1e-05_gwas-window500000_eqtl-window0_coloc-tests.txt") as f:
         all_data = []
         f.readline()
         for line in f:
@@ -26,10 +26,10 @@ def main():
         print test
         
         temp = json.loads(template)
-        temp["snp_list_file"] = "/users/mgloud/projects/insulin_resistance/tmp/snp_list{0}.txt".format(i)
+        temp["snp_list_file"] = "tmp/snp_list{0}.txt".format(i)
 
         # Add locus to SNP list...but only once for each gene
-        with open("/users/mgloud/projects/insulin_resistance/tmp/snp_list{0}.txt".format(i), "w") as w:
+        with open("tmp/snp_list{0}.txt".format(i), "w") as w:
             w.write("{0}\t{1}\t{2}\n".format(test[0], test[1], test[7]))
                
         # Add corresponding gwas experiment to the list, if not already present
@@ -41,22 +41,22 @@ def main():
         temp["eqtl_experiments"][test[3]] = {"ref": "1kgenomes", "eqtl_format": "effect_size"}
 
         # Write config file to the appropriate directory
-        with open("/users/mgloud/projects/insulin_resistance/tmp/ir_config{0}.config".format(i), "w") as w:
+        with open("tmp/ir_config{0}.config".format(i), "w") as w:
             json.dump(temp, w)
 
         # Run the test
-        subprocess.call("python /users/mgloud/projects/brain_gwas/scripts/dispatch.py /users/mgloud/projects/insulin_resistance/tmp/ir_config{0}.config 1 &".format(i), shell=True)
+        subprocess.call("python bin/colocalization_pipeline/dispatch.py tmp/ir_config{0}.config 1 &".format(i), shell=True)
 
-        while int(subprocess.check_output('''ps -ef | grep "python /users/mgloud/projects/brain_gwas/scripts/dispatch.py /users/mgloud/projects/insulin_resistance/tmp/ir_config" | wc -l''', shell=True)) > 20:
+        while int(subprocess.check_output('''ps -ef | grep "python bin/colocalization_pipeline/dispatch.py tmp/ir_config" | wc -l''', shell=True)) > 20:
             time.sleep(1)
 
     # Clean up
-    subprocess.call("rm -rf /users/mgloud/projects/insulin_resistance/tmp", shell=True)
-    subprocess.call("mkdir /users/mgloud/projects/insulin_resistance/tmp", shell=True)
+    subprocess.call("rm -rf tmp", shell=True)
+    subprocess.call("mkdir tmp", shell=True)
 
 template = '''
 {
-        "out_dir_group": "ir-v8",
+        "out_dir": "output/colocalization/raw/ir-v8",
 
        "gwas_experiments": 
 	{
@@ -73,7 +73,7 @@ template = '''
 		"snps_from_list",
 
 	"snp_list_file":
-                "/users/mgloud/projects/insulin_resistance/tmp/snp_list{0}.txt",
+                "tmp/snp_list{0}.txt",
 
 	"methods": 
 	{
@@ -85,7 +85,7 @@ template = '''
 		"1kgenomes": 
 		{
 			"file": 
-                                "/mnt/lab_data/montgomery/shared/1KG/hg38/ALL.chr{0}_GRCh38.genotypes.20170504.vcf.gz",
+                                "data/1KG/ALL.chr{0}_GRCh38.genotypes.20170504.vcf.gz",
 
                 	"af_attribute": 
 				"AF",

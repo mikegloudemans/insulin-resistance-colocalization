@@ -20,32 +20,11 @@ top level.
 
 A few other miscellaneous scripts for analyses that may be of interest but were not explicitly described in the paper.
 
+#### `scripts/colocalization`
 
+#### `scripts/post_coloc`
 
-#### `scripts/config`
-
-Config files for selection of SNP lists and for the colocalization tests themselves.
-
-#### `scripts/enumerate_candidate_snps`
-
-Scripts for assembling a broad list of candidate SNPs and loci for further follow-up using the other
-data sources described in the paper.
-
-Also, scripts for annotating these candidates with GWAS, colocalization, and ATAC-seq peak overlaps.
-
-And, importantly, QC checks for the above steps!
-
-##### `scripts/enumerate_candidate_snps/ld_annotations`
-
-Selection of "LD buddies" near GWAS SNPs.
-
-#### `scripts/munge_gwas`
-
-Scripts for formatting GWAS files consistently.
-
-#### `scripts/test_mapt_haplotypes`
-
-Scripts for differential testing of expression between the two possible MAPT haplotypes.
+#### `scripts/pre_coloc`
 
 
 ## Required Tools
@@ -54,14 +33,14 @@ The following analyses were performed using other publicly available tools. To f
 analyses, you will have to install or link these tools within the `bin` subfolder, or modify the
 `pipe.sh` script to include the paths to the directories where these tools are installed.
 
-* The tools for downloading and munging the publicly available GWAS summary statistics
+* Tools for downloading and munging publicly available GWAS summary statistics
 are available at https://github.com/mikegloudemans/gwas-download/.
-* The colocalization pipeline is available in a basic form at https://bitbucket.org/mgloud/production_coloc_pipeline/src. 
-An extended and hopefully easier-to-use pipeline with a greater variety of options and analyses, closer to what was used for this
-paper, will soon be available at https://github.com/mikegloudemans/ensemble_coloc_pipeline.
 * Graphical visualization of colocalizations was performed using [LocusCompare](https://locuscompare.com) (Liu et al. 2019)
 * The analysis performed in this paper uses an integration of the publicly available tools [FINEMAP](http://www.christianbenner.com/) (Benner et al. 2016)
-and [eCAVIAR](http://zarlab.cs.ucla.edu/tag/ecaviar/) (Hormozdiari et al. 2016)
+and [eCAVIAR](http://zarlab.cs.ucla.edu/tag/ecaviar/) (Hormozdiari et al. 2016), 
+available in a basic form at https://bitbucket.org/mgloud/production_coloc_pipeline/src. 
+An extended and hopefully easier-to-use pipeline with a greater variety of options and analyses, closer to what was used for this
+paper, will soon be available at https://github.com/mikegloudemans/ensemble_coloc_pipeline.
 
 ## Required Data
 
@@ -70,7 +49,7 @@ and some internally generated. I'm currently exploring ways to just link all or 
 data files here as a single download. Until then, please contact me directly (see _Contact_ section below) and I'll share 
 the relevant files directly, ASAP.
 
-90% of the analysis, including the core colocalization analysis can be completed using just the following
+90% of the analysis, including the core colocalization analysis, can be completed using just the following
 data files:
 
 ### Getting started

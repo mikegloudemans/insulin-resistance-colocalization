@@ -9,6 +9,10 @@ author: "Mike Gloudemans"
 date: "`r format(Sys.time(), '%d %B, %Y')`"
 ---
 
+```{r setup}
+knitr::opts_knit$set(root.dir = '../..')
+```
+
 ```{r include=FALSE}
 require(reshape2)
 require(ggplot2)
@@ -23,7 +27,6 @@ all traits but then subset down to these.
 ```{r include=FALSE}
 # Config file should be specified in the script that renders this file
 config = fromJSON(file=config_file)
-
 # For including in RMarkdown
 
 trait_list = sapply(config$kept_traits, function(x) {s=strsplit(x, "/"); return(s[[1]][length(s[[1]])])})
@@ -65,6 +68,11 @@ inclusion criterion for this list).
 
 ```{r}
 all_gwas_snps = read.table(config$gwas_snp_list, col.names=c("chr", "snp.pos", "pvalue", "trait", "gwas_file"), fill=TRUE, skip=1)
+
+## Temporary, for local runs ##
+all_gwas_snps$gwas_file = gsub("/users/mgloud/projects/insulin_resistance/", "", all_gwas_snps$gwas_file)
+all_gwas_snps$eqtl_file = gsub("/users/mgloud/projects/insulin_resistance/", "", all_gwas_snps$gwas_file)
+
 all_gwas_snps = all_gwas_snps[all_gwas_snps$gwas_file %in% config$kept_traits,]
 all_gwas_snps = all_gwas_snps[apply(all_gwas_snps[c("pvalue", "trait")], 1, FUN=pval_passing, threshold = config$gwas_pval_threshold),]
 all_gwas_snps$ref_snp = paste(all_gwas_snps$chr, all_gwas_snps$snp.pos, sep="_")
@@ -130,11 +138,17 @@ so no SNPs that shouldn't be tested will slip through this step.
 
 ```{r}
 all_snp_gene_pairs = read.table(config$snp_gene_pair_list, col.names=c("chr", "snp.pos", "gwas_pvalue", "trait", "eqtl_pvalue", "gwas_file", "feature", "eqtl_file"), skip=1)
+
+## Temporary, for local runs ##
+all_snp_gene_pairs$gwas_file = gsub("/users/mgloud/projects/insulin_resistance/", "", all_snp_gene_pairs$gwas_file)
+all_snp_gene_pairs$eqtl_file = gsub("/users/mgloud/projects/brain_gwas/", "", all_snp_gene_pairs$eqtl_file)
+
 all_snp_gene_pairs = all_snp_gene_pairs[all_snp_gene_pairs$gwas_file %in% config$kept_traits,]
 all_snp_gene_pairs = all_snp_gene_pairs[all_snp_gene_pairs$eqtl_file %in% config$kept_eqtls,]
 all_snp_gene_pairs$ref_snp = paste(all_snp_gene_pairs$chr, all_snp_gene_pairs$snp.pos, sep="_")
 all_snp_gene_pairs = all_snp_gene_pairs[apply(all_snp_gene_pairs[c("gwas_pvalue", "trait")], 1, FUN=pval_passing, threshold = config$gwas_pval_threshold),]
 all_snp_gene_pairs = all_snp_gene_pairs[all_snp_gene_pairs$ref_snp %in% unique(all_gwas_snps$ref_snp),]
+dput(head(all_gwas_snps$ref_snp, 200), file="debug.tst")
 all_snp_gene_pairs$locus = group_to_loci(all_snp_gene_pairs$ref_snp)
 # Total number of unique genes to test
 length(unique(all_snp_gene_pairs$feature))
