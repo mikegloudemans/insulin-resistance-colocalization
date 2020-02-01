@@ -21,7 +21,8 @@ python scripts/colocalization/test_IR_colocs.py
 # Make table with colocalization results.
 # Get basic metrics on the number of runs and candidates;
 # Also perform basic QC checks
-Rscript scripts/post_coloc/render_output.R scripts/post_coloc/eqtls_only.post.config
+Rscript scripts/post_coloc/summarize_pre_test_statistics.R scripts/post_coloc/eqtls_only.post.config
+Rscript scripts/post_coloc/aggregate_coloc_results.R scripts/post_coloc/eqtls_only.post.config
 
 # A few last QC sanity checks to make sure none of the colocalization tests have been dropped,
 # as we've sometimes seen in the past. Consider merging these with the summarize_pre_test_statistics.Rmd file though
