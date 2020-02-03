@@ -3,9 +3,15 @@
 # For the differences that exist, is there a reasonable explanation?
 
 require(dplyr)
+require(rjson)
 
-pre_run_coloc = read.table("/users/mgloud/projects/insulin_resistance/output/test_snps/ir-v8_all-gwas_gtex-ir_gwas-pval1e-05_eqtl-pval1e-05_gwas-window500000_eqtl-window0_coloc-tests.txt", header = TRUE)
-post_run_coloc = read.table("/users/mgloud/projects/insulin_resistance/output/post_coloc/eqtls_only/full_coloc_results_qced.txt", header =TRUE)
+config_file = commandArgs(trailingOnly=TRUE)[1]
+
+# Load pre-specified config file
+config = fromJSON(file=config_file)
+
+pre_run_coloc = read.table(config$coloc_test_list, header=TRUE)
+post_run_coloc = read.table(paste(config$out_dir, "full_coloc_results_qced.txt", sep="/"), header=TRUE, sep="\t")
 
 pre_run_coloc$test_id = paste(pre_run_coloc$chr, pre_run_coloc$snp_pos, pre_run_coloc$eqtl_file, pre_run_coloc$gwas_file, pre_run_coloc$feature, sep="_")
 post_run_coloc$test_id = paste(post_run_coloc$ref_snp, post_run_coloc$eqtl_file, post_run_coloc$base_gwas_file, post_run_coloc$feature, sep="_")
