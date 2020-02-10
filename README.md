@@ -1,10 +1,10 @@
 # Insulin Resistance Colocalization Analysis
 
+Analysis performed by Mike Gloudemans
+
 ##### Table of Contents  
 [Headers](#headers)  
 [Emphasis](#emphasis)
-
-Analysis performed by Mike Gloudemans
 
 ## Summary
 
@@ -74,6 +74,7 @@ Adds a few additional annotations, such as HGNC gene ID and rsid. Output will be
 
 The final QC check for any final errors in the file. You'll have to inspect the output yourself
 to verify correctness. Specifically, we look for:
+
 * Were the vast majority of candidate SNPs actually tested for colocalization? (Some dropout is normal due
   to minor eQTL / GWAS / reference genome discrepancies, as well as due to loci for which the eQTL gene lies
   too far from the GWAS locus to be confidently tested. But if more than ~5% of loci were dropped, this usually
