@@ -14,3 +14,5 @@ static
 *.png
 scripts/auxiliary/eriks_bonus/eriks_grant/results/
 /bin
+scripts/auxiliary/old
+scripts/old

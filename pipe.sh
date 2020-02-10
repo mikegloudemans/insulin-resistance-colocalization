@@ -1,6 +1,22 @@
 # Full pipeline for running all colocalization and post-coloc categorization
 # Author: Mike Gloudemans
 
+####################################################
+# Make the directories that we'll need later
+# Anything deeper will be created by the individual 
+# scripts at runtime
+####################################################
+
+mkdir tmp
+
+mkdir -p output/colocalization
+mkdir -p output/post_coloc
+mkdir -p output/test_snps
+
+####################################################
+# Pre-processing steps to format the relevant data 
+####################################################
+
 # Munge all files of interest
 bash scripts/format_gwas/munge.sh
 
@@ -18,9 +34,9 @@ python scripts/colocalization/test_IR_colocs.py
 # given the correct config file
 #
 
-eqtl_config_file="scripts/post_coloc/eqtls_only.post.config"
-sqtl_config_file="scripts/post_coloc/eqtls_only.post.config"
-edqtl_config_file="scripts/post_coloc/edqtls_only.post.config"
+eqtl_config_file="scripts/post_coloc/config/eqtls_only.post.config"
+sqtl_config_file="scripts/post_coloc/config/eqtls_only.post.config"
+edqtl_config_file="scripts/post_coloc/config/edqtls_only.post.config"
 
 # Just add more files to the list if we want to repeat post-processing for other QTL types. The steps are the
 # same, as long as the appropriate config file is used.
