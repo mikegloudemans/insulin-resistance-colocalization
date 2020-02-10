@@ -130,6 +130,8 @@ group_to_loci = function(x)
 
 all_gwas_snps$locus = group_to_loci(all_gwas_snps$ref_snp)
 write_summary(sprintf("Unique GWAS loci:\t%d\n", length(unique(all_gwas_snps$locus))))
+write_summary(sprintf("Total number of unique pairs of SNP and GWAS trait\t%d\n", length(unique(paste(all_gwas_snps$ref_snp, all_gwas_snps$trait, sep="_")))))
+write_summary(sprintf("Total number of unique pairs of locus and GWAS trait\t%d\n", length(unique(paste(all_gwas_snps$locus, all_gwas_snps$trait, sep="_")))))
 
 ##############################################################################
 ### Count the total number of genes found before filtering by eQTL p-values.
@@ -318,7 +320,23 @@ results$eqtl_pval = 10^(-results$X.log_eqtl_pval)
 results = results[apply(results[c("gwas_pval", "base_gwas_file")], 1, FUN=pval_passing, threshold = config$gwas_pval_threshold),]
 results = results[apply(results[c("eqtl_pval", "eqtl_file")], 1, FUN=pval_passing, threshold = config$eqtl_pval_threshold),]
 results = results[results$ref_snp %in% unique(all_gwas_snps$ref_snp),]
+print("dim(results)")
 dim(results)
+
+results$locus = group_to_loci(results$ref_snp)
+
+coloc_passing = results[results$clpp_mod >= as.numeric(config$target_clpp_mod_cutoff),]
+
+write_summary(sprintf("Number of colocalized lead SNPs:\t%d\n", length(unique(coloc_passing$ref_snp))))
+write_summary(sprintf("Number of colocalized loci:\t%d\n", length(unique(coloc_passing$locus))))
+write_summary(sprintf("Number of colocalized genes:\t%d\n", length(unique(coloc_passing$feature))))
+write_summary(sprintf("Number of colocalized SNP-gene pairs:\t%d\n", length(unique(paste(coloc_passing$ref_snp, coloc_passing$feature, sep="_")))))
+write_summary(sprintf("Number of colocalized locus-gene pairs:\t%d\n", length(unique(paste(coloc_passing$locus, coloc_passing$feature, sep="_")))))
+
+
+#########################################################
+### QC stuff: troubleshooting failed tests
+#########################################################
 
 ### How many SNPs were dropped during the colocalization analysis?
 dropped = testable_snps[!(testable_snps$ref_snp %in% unique(results$ref_snp)),]
@@ -329,7 +347,12 @@ sum(!duplicated(dropped[c("ref_snp", "feature")]))
 print("SNPs dropped:")
 length(unique(dropped$ref_snp))
 
-### Which SNPs were tested even though they don't appear to pass COLOC threshold in any tissue? 
+### Which SNPs were tested even though they don't appear to pass the required threshold in any tissue?
+
+# NOTE: I think this section only matters if we're running the mode where we fill the matrix, allowing all
+# SNPs to be tested if they end up significant in any trait whatsoever. But the above filters may be problematic
+# in such a case...the bottom line is that for the final generalizable version, I should choose one as the
+# default and then add the other option (probably "matrix-filling") as a user-definable parameter
 
 # Why? (Since we apply a filter at the beginning, this suggests that
 # they've been dropped because their lead variant was not measured in the eQTL study.)
@@ -476,6 +499,5 @@ if (FALSE)
 
 	write.table(missing_pairs[c("ref_snp", "feature", "reason_missing")], file=paste(config$out_dir, "all_missing_pairs_explained.txt", sep="/"), quote=FALSE, sep="\t", col.names=TRUE, row.names=FALSE)
 }
+
 write.table(results, file=paste(config$out_dir, "full_coloc_results_qced.txt", sep="/"), quote=FALSE, sep="\t", col.names=TRUE, row.names=FALSE)
-
-
