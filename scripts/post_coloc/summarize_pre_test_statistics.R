@@ -19,7 +19,7 @@ config = fromJSON(file=config_file)
 
 if ("min_locus_distance" %in% names(config))
 {
-	min_locus_distance = config$min_locus_distance
+	min_locus_distance = as.numeric(config$min_locus_distance)
 } else
 {
 	min_locus_distance = default_min_locus_distance

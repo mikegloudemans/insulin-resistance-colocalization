@@ -16,7 +16,7 @@ ld_file = "data/ld/EUR_geno_hg38.txt.gz"
 ### Setup and loading config settings
 #####################################################
 
-config_file = commandArgs(trailingOnly=TRUE)[1]
+#config_file = commandArgs(trailingOnly=TRUE)[1]
 
 # Load pre-specified config file
 config = fromJSON(file=config_file)
@@ -84,7 +84,7 @@ for (l in 1:max(colocs$locus))
 			buddy = unlist(strsplit(ld[i], "\t"))
 			all_snps$chr[snp_num] = gsub("chr", "", buddy[ld_chr])
 			all_snps$pos[snp_num] = buddy[ld_pos]
-			all_snps$ld[snp_num] = buddy[ld_r2]
+			all_snps$ld[snp_num] = as.numeric(buddy[ld_r2])
 		}
 	}
 	# Remove duplicates, since some SNPs might have been added more than once.
@@ -125,6 +125,41 @@ for (l in 1:max(colocs$locus))
 all_loci = all_loci[1:loc_table_idx,]
 all_loci$id = paste(all_loci$vep, all_loci$chr, all_loci$pos, all_loci$ref, all_loci$alt, all_loci$gene, all_loci$feature, all_loci$r2, sep=".")
 vep_summary = all_loci %>% group_by(locus) %>% summarize(paste(id, collapse="|"))
+
+# I'm not sure quite why this is necessary, but there's probably a better way to
+# fix this at the time the vector is created instead of cleaning it up now.
+# It has something to do with retrieving null values for certain values in the above code though
+# TODO: It's because some of the SNPs have LD buddies on "alternate haplotype" scaffolds (which
+# admittedly might actually be important to know, but causes issues since they're not in our
+# tabix'ed file)
+all_loci$vep[sapply(all_loci$vep, is.null)] = NA
+all_loci$ref[sapply(all_loci$ref, is.null)] = NA
+all_loci$alt[sapply(all_loci$alt, is.null)] = NA
+all_loci$r2[sapply(all_loci$r2, is.null)] = NA
+all_loci$gene[sapply(all_loci$gene, is.null)] = NA
+all_loci$feature[sapply(all_loci$feature, is.null)] = NA
+
+all_loci$vep = unlist(all_loci$vep)
+all_loci$ref = unlist(all_loci$ref)
+all_loci$alt = unlist(all_loci$alt)
+all_loci$r2 = unlist(all_loci$r2)
+all_loci$gene = unlist(all_loci$gene)
+all_loci$feature = unlist(all_loci$feature)
+
+# A few other things
+
+# Get loci in ID with alternate scaffolds
+# Technically should search for more than just "alt" since "hap" for example might also be there...check the file for this
+alt_scaffolds = vep_summary[sapply(vep_summary[,2], function(x) {grepl("alt", x)}),]$locus
+
+print(table(all_loci$vep))
+
+for (consequence in unique(all_loci$vep))
+{
+	print(consequence)
+	loci_with_effect = vep_summary[sapply(vep_summary[,2], function(x) {grepl(consequence, x)}),]
+	print(dim(loci_with_effect)[1])
+}
 
 # Write output files
 
