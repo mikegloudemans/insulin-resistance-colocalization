@@ -13,12 +13,13 @@ config = fromJSON(file=config_file)
 pre_run_coloc = read.table(config$coloc_test_list, header=TRUE)
 post_run_coloc = read.table(paste(config$out_dir, "full_coloc_results_qced.txt", sep="/"), header=TRUE, sep="\t")
 
-pre_run_coloc$test_id = paste(pre_run_coloc$chr, pre_run_coloc$snp_pos, pre_run_coloc$eqtl_file, pre_run_coloc$gwas_file, pre_run_coloc$feature, sep="_")
+pre_run_coloc$test_id = paste(pre_run_coloc$chr, pre_run_coloc$snp_pos, pre_run_coloc$lookup_file, pre_run_coloc$source_file, pre_run_coloc$lookup_trait, sep="_")
 post_run_coloc$test_id = paste(post_run_coloc$ref_snp, post_run_coloc$eqtl_file, post_run_coloc$base_gwas_file, post_run_coloc$feature, sep="_")
 
 # TODO: Make this more general at some point
-pre_run_coloc = pre_run_coloc[!grepl("2hr", pre_run_coloc$gwas_file),]
-pre_run_coloc = pre_run_coloc[(grepl("ISI_Model_", pre_run_coloc$gwas_file) | grepl("MI_adjBMI_", pre_run_coloc$gwas_file) | (pre_run_coloc$gwas_pvalue < 5e-8)),]
+# Right now it's not reflecting the filters we applied at the last step
+pre_run_coloc = pre_run_coloc[!grepl("2hr", pre_run_coloc$source_file),]
+pre_run_coloc = pre_run_coloc[(grepl("ISI_Model_", pre_run_coloc$source_file) | grepl("MI_adjBMI_", pre_run_coloc$source_file) | (pre_run_coloc$source_pvalue < 5e-8)),]
 
 print("Number of candidate loci successfully tested:")
 sum(pre_run_coloc$test_id %in% post_run_coloc$test_id)
@@ -35,13 +36,13 @@ rejected_tests = pre_run_coloc[!(pre_run_coloc$test_id %in% post_run_coloc$test_
 # Each GWAS should have a reasonable number of tested SNPs.
 # The range of SNP pvalues for each GWAS and eQTL study should match the specified cutoffs
 print("Number of tested SNPs and p-value range for each GWAS:")
-gwas_stats = post_run_coloc %>% group_by(base_gwas_file) %>% summarize(total_snps=length(unique(ref_snp)), gwas_range=paste(round(range(X.log_gwas_pval),2), collapse="..."), eqtl_range = paste(round(range(X.log_eqtl_pval),2), collapse="..."))
+gwas_stats = post_run_coloc %>% group_by(base_gwas_file) %>% summarize(total_snps=length(unique(ref_snp)), gwas_range=paste(round(range(neg_log_gwas_pval),2), collapse="..."), eqtl_range = paste(round(range(neg_log_eqtl_pval),2), collapse="..."))
 print(gwas_stats)
 print("")
 
 # Same as above, just grouped by eQTLs instead of GWAS
 print("Number of tested SNPs and p-value range for each QTL study:")
-eqtl_stats = post_run_coloc %>% group_by(eqtl_file) %>% summarize(total_snps=length(unique(ref_snp)), gwas_range=paste(round(range(X.log_gwas_pval),2), collapse="..."), eqtl_range = paste(round(range(X.log_eqtl_pval),2), collapse="..."))
+eqtl_stats = post_run_coloc %>% group_by(eqtl_file) %>% summarize(total_snps=length(unique(ref_snp)), gwas_range=paste(round(range(neg_log_gwas_pval),2), collapse="..."), eqtl_range = paste(round(range(neg_log_eqtl_pval),2), collapse="..."))
 print(eqtl_stats)
 print("")
 

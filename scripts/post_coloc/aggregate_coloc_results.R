@@ -18,7 +18,7 @@ require(rjson)
 config_file = commandArgs(trailing=TRUE)[1]
 config = fromJSON(file=config_file)
 
-results = read.table(paste(config$out_dir, "full_coloc_results_qced.txt", sep="/"), sep="\t", header=TRUE)
+results = read.table(paste(config$out_dir, "full_coloc_results_qced.txt", sep="/"), sep="\t", header=TRUE, stringsAsFactors=FALSE)
 results$chr = sapply(as.character(results$ref_snp), function(x) {strsplit(x, "_")[[1]][1]})
 results$pos = sapply(as.character(results$ref_snp), function(x) {strsplit(x, "_")[[1]][2]})
 
@@ -69,8 +69,8 @@ results = merge(rsids[c("ref_snp", "rsid")], results, by="ref_snp")
 #results$gene_end = ensembl_locs[match(results$feature, ensembl_locs$feature),]$gene_end
 
 
-results$min_gwas_pval = 10^-(results$X.log_gwas_pval)
-results$min_eqtl_pval = 10^-(results$X.log_eqtl_pval)
+results$min_gwas_pval = 10^-(results$neg_log_gwas_pval)
+results$min_eqtl_pval = 10^-(results$neg_log_eqtl_pval)
 
 ### View the assignment of SNPs to loci
 
@@ -78,7 +78,9 @@ results$min_eqtl_pval = 10^-(results$X.log_eqtl_pval)
 # been assigned the same locus number.
 
 # Make sure the assigned locus numbers are reasonable.
-stopifnot(length(unique(results$locus)) == max(results$locus))
+# This isn't necessary anymore, since loci correspond to fixed intervals
+# from the ldetect data.
+# stopifnot(length(unique(results$locus)) == max(results$locus))
 
 # View the assignment of SNPs to loci
 sub = results[!duplicated(results$ref_snp),]

@@ -36,6 +36,9 @@ full_config$out_dir
 # QC and preparation script)
 data = read.table(paste0(full_config$out_dir, "/clpp_results_", full_config$analysis_date, ".txt"), header=TRUE, sep="\t")
 
+# Every SNP should be assigned to a locus!
+stopifnot(sum(is.na(data$locus)) == 0)
+
 cutoff_gwas_pval = as.numeric(class_config$pre_filters$max_gwas_pval)
 cutoff_eqtl_pval = as.numeric(class_config$pre_filters$max_eqtl_pval)
 cutoff_snp_count = as.numeric(class_config$pre_filters$min_snp_count)
@@ -81,12 +84,13 @@ loci_list = sort(unique(sub$locus))
 step1_list = rep("", length(loci_list))
 step2_list = rep("", length(loci_list))
 step3_list = rep("", length(loci_list))
+pancreas_list = rep("", length(loci_list))
 
 ###################################
 # Part 1: General sorting
 ###################################
 
-summary = sub %>% group_by(locus, ensembl, hgnc) %>% summarize(colocs=sum(clpp_mod >= strong_clpp_threshold), weak_colocs=sum((clpp_mod >= weak_clpp_threshold) & (clpp_mod < strong_clpp_threshold)))
+summary = sub %>% group_by(locus, ensembl) %>% summarize(colocs=sum(clpp_mod >= strong_clpp_threshold), weak_colocs=sum((clpp_mod >= weak_clpp_threshold) & (clpp_mod < strong_clpp_threshold)))
 coloc_counts = summary %>% group_by(locus) %>% summarize(strong_coloc_genes = sum(colocs > 0), weak_coloc_genes = sum((weak_colocs > 0) & (colocs == 0)), any_coloc_genes=sum((colocs > 0) | (weak_colocs > 0)), candidates=length(ensembl))
 
 candidates_equals = function(x, loci, coloc_matrix)
@@ -116,7 +120,7 @@ weak_greater_than = function(x, loci, coloc_matrix)
 
 for (type in names(class_config$step1_coloc_sorting))
 {
-	pass = 1:max(coloc_counts$locus)
+	pass = coloc_counts$locus
 
 	if ("candidates_equals" %in% names(class_config$step1_coloc_sorting[[type]][[1]]))
 	{
@@ -164,22 +168,29 @@ strong = tissue_coloc[tissue_coloc$has_strong_coloc == 1,]
 strong_loci = unique(strong$locus)
 strong_classes = sapply(strong_loci, function(x)
        {
+
 		tissues = strong[strong$locus == x,]$eqtl_file
        		# Test whether the colocalized tissues match some
        		# tissue group of interest
-		
-       		for (type in names(class_config$step2_tissue_sorting))
+
+       		# See if there's a strong coloc in Pancreas
+       		for (i in 1:length(class_config$step2_tissue_sorting))
 		{
-       			if(sum(!(class_config$step2_tissue_sorting[[type]] %in% tissues)) + sum(!(tissues %in% class_config$step2_tissue_sorting[[type]])) == 0)
+			type = class_config$step2_tissue_sorting[[i]]
+			# It's a match if there are no tissues colocalized
+			# that are not in this class
+			if(sum(!(tissues %in% type$tissues)) == 0)
 			{
-				return(type)
+				return(type$name)
 			}
+
 		}
 
 		# If not, it still does have at least one coloc,
 		# so doesn't belong in the "None" category
 		return("Other")
        })
+
 step2_list[which(loci_list %in% strong_loci)] = strong_classes
 
 # Then check weak colocs
@@ -192,15 +203,19 @@ weak_classes = sapply(weak_loci, function(x)
 		tissues = weak[weak$locus == x,]$eqtl_file
        		# Test whether the colocalized tissues match some
        		# tissue group of interest
-		
-       		for (type in names(class_config$step2_tissue_sorting))
+       		
+       		# See if there's a strong coloc in Pancreas
+		for (i in 1:length(class_config$step2_tissue_sorting))
 		{
-       			if(sum(!(class_config$step2_tissue_sorting[[type]] %in% tissues)) + sum(!(tissues %in% class_config$step2_tissue_sorting[[type]])) == 0)
+			type = class_config$step2_tissue_sorting[i]
+			# It's a match if there are no tissues colocalized
+			# that are not in this class
+			if(sum(!(tissues %in% type$tissues)) == 0)
 			{
-				return(type)
+				return(type$name)
 			}
-		}
 
+		}
 		# If not, it still does have at least one coloc,
 		# so doesn't belong in the "None" category
 		return("Other")
@@ -213,8 +228,16 @@ coloc_by_locus = tissue_coloc %>% group_by(locus) %>% summarize(total_coloc = su
 stopifnot(sum(!(step2_list[which(loci_list %in% coloc_by_locus$locus[coloc_by_locus$total_coloc])] == "")) == 0)
 step2_list[which(loci_list %in% coloc_by_locus$locus[coloc_by_locus$total_coloc])] = "None"
 
+pancreas_strong = tissue_coloc[grepl("Pancreas", tissue_coloc$eqtl_file) & (tissue_coloc$has_strong_coloc == 1),]
+pancreas_weak = tissue_coloc[grepl("Pancreas", tissue_coloc$eqtl_file) & (tissue_coloc$has_weak_only == 1),]
+pancreas_list[rep(TRUE, length(pancreas_list))] = "none"
+pancreas_list[which(loci_list %in% unique(pancreas_strong$locus))] = "strong"
+pancreas_list[which(loci_list %in% unique(pancreas_weak$locus))] = "weak"
+
+
 # Just make sure every site's been assigned now
 stopifnot(sum(step2_list == "") == 0)
+
 
 ###################################
 # Part 3: Which GWAS matter most?
@@ -247,9 +270,42 @@ step3_list[which(loci_list %in% coloc_by_locus$locus[coloc_by_locus$total_coloc]
 stopifnot(sum(step3_list == "") == 0)
 
 
+#############################################
+# Get names of colocalized genes. We want
+# - all candidate eQTL genes
+# - all candidate sQTL genes
+# - all candidate sQTL features
+# - all candidate genes (either)
+# - all strong colocalized eQTL genes
+# - all strong colocalized sQTL genes
+# - all strong colocalized sQTL features
+# - all strong colocalized genes (either)
+# - all weak colocalized eQTL genes
+# - all weak colocalized sQTL genes
+# - all weak colocalized sQTL features
+# - all weak colocalized genes (either)
+#############################################
+coloc_genes = sub %>% group_by(locus) %>% summarize(candidate_genes = paste(unique(ensembl), collapse=";"), 
+				      candidate_eqtl_genes = paste(unique(ensembl[grepl("eQTL", eqtl_file)]), collapse=";"), 
+				      candidate_sqtl_genes = paste(unique(ensembl[grepl("sQTL", eqtl_file)]), collapse=";"), 
+				      candidate_sqtl_features = paste(unique(feature[grepl("sQTL", eqtl_file)]), collapse=";"),
+				      weak_coloc_genes = paste(unique(ensembl[(clpp_mod > weak_clpp_threshold) & (clpp_mod < strong_clpp_threshold)]), collapse=";"), 
+				      weak_coloc_eqtl_genes = paste(unique(ensembl[(clpp_mod > weak_clpp_threshold) & (clpp_mod < strong_clpp_threshold)& grepl("eQTL", eqtl_file)]), collapse=";"), 
+				      weak_coloc_sqtl_genes = paste(unique(ensembl[(clpp_mod > weak_clpp_threshold) & (clpp_mod < strong_clpp_threshold)& grepl("sQTL", eqtl_file)]), collapse=";"), 
+				      weak_coloc_sqtl_features = paste(unique(feature[(clpp_mod > weak_clpp_threshold) & (clpp_mod < strong_clpp_threshold) & grepl("sQTL", eqtl_file)]), collapse=";"),
+				      strong_coloc_genes = paste(unique(ensembl[(clpp_mod >= strong_clpp_threshold)]), collapse=";"), 
+				      strong_coloc_eqtl_genes = paste(unique(ensembl[(clpp_mod >= strong_clpp_threshold)& grepl("eQTL", eqtl_file)]), collapse=";"), 
+				      strong_coloc_sqtl_genes = paste(unique(ensembl[(clpp_mod >= strong_clpp_threshold)& grepl("sQTL", eqtl_file)]), collapse=";"), 
+				      strong_coloc_sqtl_features = paste(unique(feature[(clpp_mod >= strong_clpp_threshold) & grepl("sQTL", eqtl_file)]), collapse=";"),
+				      strong_coloc_both = paste(unique(ensembl[(clpp_mod >= strong_clpp_threshold)& grepl("eQTL", eqtl_file)])[unique(ensembl[(clpp_mod >= strong_clpp_threshold)& grepl("eQTL", eqtl_file)]) %in% unique(ensembl[(clpp_mod >= strong_clpp_threshold)& grepl("sQTL", eqtl_file)])], collapse=";"))
+
+
 ####### Put all the results together ########
 
-classes = data.frame(list(locus=loci_list, step1=step1_list, step2=step2_list, step3=step3_list))
+classes = data.frame(list(locus=loci_list, step1=step1_list, step2=step2_list, step3=step3_list, pancreas=pancreas_list))
+
+classes = merge(classes, coloc_genes)
+
 write.table(classes, file=paste0(full_config$out_dir, "/coloc_classification_", full_config$analysis_date, ".txt"), quote=FALSE, row.names=FALSE, col.names=TRUE, sep="\t")
 
 
@@ -257,6 +313,7 @@ results_summaries = list()
 results_summaries$step1 = classes %>% group_by(step1) %>% summarize(length(locus))
 results_summaries$step2 = classes %>% group_by(step2) %>% summarize(length(locus))
 results_summaries$step3 = classes %>% group_by(step3) %>% summarize(length(locus))
+results_summaries$pancreas = classes %>% group_by(pancreas) %>% summarize(length(locus))
 
 
 summary_file = paste0(full_config$out_dir, "/coloc_class_summary_", full_config$analysis_date, ".txt")

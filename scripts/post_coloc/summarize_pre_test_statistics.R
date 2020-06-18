@@ -72,52 +72,54 @@ print(trait_list)
 # inclusion criterion for this list).
 
 ### Get number of unique GWAS lead SNPs.
-
-all_gwas_snps = read.table(config$gwas_snp_list, col.names=c("chr", "snp.pos", "pvalue", "trait", "gwas_file"), fill=TRUE, skip=1)
+all_gwas_snps = read.table(config$gwas_snp_list, col.names=c("chr", "snp.pos", "pvalue", "source_trait", "source_file"), fill=TRUE, skip=1)
 
 ## Temporary, for local runs ##
-all_gwas_snps$gwas_file = gsub("/users/mgloud/projects/insulin_resistance/", "", all_gwas_snps$gwas_file)
-all_gwas_snps$trait = gsub("/users/mgloud/projects/insulin_resistance/", "", all_gwas_snps$trait)
-
-all_gwas_snps = all_gwas_snps[all_gwas_snps$gwas_file %in% config$kept_traits,]
-all_gwas_snps = all_gwas_snps[apply(all_gwas_snps[c("pvalue", "trait")], 1, FUN=pval_passing, threshold = config$gwas_pval_threshold),]
+all_gwas_snps = all_gwas_snps[all_gwas_snps$source_file %in% config$kept_traits,]
+all_gwas_snps = all_gwas_snps[apply(all_gwas_snps[c("pvalue", "source_trait")], 1, FUN=pval_passing, threshold = config$gwas_pval_threshold),]
 all_gwas_snps$ref_snp = paste(all_gwas_snps$chr, all_gwas_snps$snp.pos, sep="_")
 
 write_summary(sprintf("Unique GWAS lead SNPs:\t%d\n", length(unique(all_gwas_snps$ref_snp))))
 
-write.table(all_gwas_snps, file=paste(config$out_dir, "all_gwas_snps.txt", sep="/"), quote=FALSE, col.names=TRUE, row.names=FALSE, sep="\t")
 
 ### Count the number of SNPs considered for each GWAS.
 
-hits_per_trait = all_gwas_snps %>% group_by(trait) %>% summarize(snp_count = length(unique(ref_snp)))
-hits_per_trait$trait = sapply(as.character(hits_per_trait$trait), function(x) {s=strsplit(x, "/"); return(s[[1]][length(s[[1]])])})
+hits_per_trait = all_gwas_snps %>% group_by(source_trait) %>% summarize(snp_count = length(unique(ref_snp)))
+hits_per_trait$trait = sapply(as.character(hits_per_trait$source_trait), function(x) {s=strsplit(x, "/"); return(s[[1]][length(s[[1]])])})
 print(hits_per_trait)
 
-# Count the number of unique loci that we're testing
-# Function inputs a vector of SNPs and clusters them into locis
-# by distance
+# The new algorithm for grouping to loci!
+# Invariant to the total number of variants in the list
+
 group_to_loci = function(x)
 {
-        ids = unique(as.character(x))
+	# Get the set of unique reference SNPs
+	ids = unique(as.character(x))
 	ids = ids[order(ids)]
-        chr = sapply(as.character(ids), function(x) {strsplit(x, "_")[[1]][1]})
+        chr = as.numeric(sapply(as.character(ids), function(x) {strsplit(x, "_")[[1]][1]}))
         pos = as.numeric(sapply(as.character(ids), function(x) {strsplit(x, "_")[[1]][2]}))
         loc_nums = rep(0, length(ids))
-        loc_nums[1] = 1
-        for (i in 2:length(ids))
-        {
-                # Check if there's a SNP above in the list within 1 MB of this SNP]
-                same = (chr[1:(i-1)] == chr[i]) & (abs(pos[1:(i-1)] - pos[i]) < min_locus_distance)
-                if (length(which(same)) != 0)
-                {
-                        loc_nums[i] = loc_nums[which(same)[1]]
-                }
-                else
-                {
-                        loc_nums[i] = max(loc_nums) + 1
-                }
-        }
 
+	# I ran liftOver to convert to hg38
+	# liftOver fourier_ls-all.hg19.bed /mnt/lab_data/montgomery/shared/liftOver/chains/hg19ToHg38.over.chain.gz fourier_ls-all.hg38.bed fourier_ls-all.hg38.failed.bed 
+
+	# Load European independent LD block partitioning from LDetect
+	ldetect = read.table("data/ldetect/fourier_ls-all.hg38.connected.bed", header=FALSE)
+	colnames(ldetect) = c("chr", "start", "stop")
+	ldetect$chr = as.numeric(gsub("chr", "", ldetect$chr))
+	ldetect$locus = 1:dim(ldetect)[1]
+
+	# Assign each SNP to its own locus segment
+        for (i in 1:length(ids))
+	{
+		# Get the chromosome we're looking for
+		sub_chr = ldetect[ldetect$chr == chr[i],]
+		# Get the exact block we're looking for
+		sub_locus = sub_chr[sub_chr$start <= pos[i] & sub_chr$stop > pos[i],]
+		loc_nums[i] = sub_locus$locus[1]
+	}
+
+	# TODO: Deal with any NA's
 	mapped_loci = sapply(x, function(j) 
 	{
 			loc_nums[which(ids == j)]
@@ -129,9 +131,7 @@ group_to_loci = function(x)
 ### How many individual loci are represented in our collection of SNP?
 
 all_gwas_snps$locus = group_to_loci(all_gwas_snps$ref_snp)
-write_summary(sprintf("Unique GWAS loci:\t%d\n", length(unique(all_gwas_snps$locus))))
-write_summary(sprintf("Total number of unique pairs of SNP and GWAS trait\t%d\n", length(unique(paste(all_gwas_snps$ref_snp, all_gwas_snps$trait, sep="_")))))
-write_summary(sprintf("Total number of unique pairs of locus and GWAS trait\t%d\n", length(unique(paste(all_gwas_snps$locus, all_gwas_snps$trait, sep="_")))))
+
 
 ##############################################################################
 ### Count the total number of genes found before filtering by eQTL p-values.
@@ -140,25 +140,33 @@ write_summary(sprintf("Total number of unique pairs of locus and GWAS trait\t%d\
 # NOTE: Again, to be in this list a SNP-gene pair must be significant at least in the GWAS,
 # so no SNPs that shouldn't be tested will slip through this step.
 
-all_snp_gene_pairs = read.table(config$snp_gene_pair_list, col.names=c("chr", "snp.pos", "gwas_pvalue", "trait", "eqtl_pvalue", "gwas_file", "feature", "eqtl_file"), skip=1)
+all_snp_gene_pairs = read.table(config$snp_gene_pair_list, col.names=c("chr", "snp.pos", "source_pvalue", "source_trait", "lookup_pvalue", "source_file", "feature", "lookup_file"), skip=1)
+
+# A bit of stuff just for more understandable labels
+all_snp_gene_pairs$ensembl = all_snp_gene_pairs$feature
+all_snp_gene_pairs$ensembl = gsub(":", ".", all_snp_gene_pairs$ensembl)
+
+# Map splice events to the corresponding gene
+splice_map = read.table("data/sqtls/gtex_v8/splice_to_gene_map.txt.gz", header=TRUE)
+splice_map$splice_junction = gsub(":", ".", splice_map$splice_junction)
+splice_indices = grepl("clu", all_snp_gene_pairs$feature)
+all_snp_gene_pairs$ensembl[splice_indices] = as.character(splice_map$gene[match(all_snp_gene_pairs$ensembl[splice_indices], splice_map$splice_junction)])
+
+# Trim the ensemble version number
+all_snp_gene_pairs$ensembl = sapply(as.character(all_snp_gene_pairs$ensembl), function(x) {strsplit(x, "\\.")[[1]][1]})
 
 ## Temporary, for local runs ##
-all_snp_gene_pairs$gwas_file = gsub("/users/mgloud/projects/insulin_resistance/", "", all_snp_gene_pairs$gwas_file)
-all_snp_gene_pairs$trait = gsub("/users/mgloud/projects/insulin_resistance/", "", all_snp_gene_pairs$trait)
-all_snp_gene_pairs$eqtl_file = gsub("/users/mgloud/projects/brain_gwas/", "", all_snp_gene_pairs$eqtl_file)
+#all_snp_gene_pairs$gwas_file = gsub("/users/mgloud/projects/insulin_resistance/", "", all_snp_gene_pairs$gwas_file)
+#all_snp_gene_pairs$trait = gsub("/users/mgloud/projects/insulin_resistance/", "", all_snp_gene_pairs$trait)
+#all_snp_gene_pairs$eqtl_file = gsub("/users/mgloud/projects/brain_gwas/", "", all_snp_gene_pairs$eqtl_file)
 
-all_snp_gene_pairs = all_snp_gene_pairs[all_snp_gene_pairs$gwas_file %in% config$kept_traits,]
-all_snp_gene_pairs = all_snp_gene_pairs[all_snp_gene_pairs$eqtl_file %in% config$kept_eqtls,]
+all_snp_gene_pairs = all_snp_gene_pairs[all_snp_gene_pairs$source_file %in% config$kept_traits,]
+all_snp_gene_pairs = all_snp_gene_pairs[all_snp_gene_pairs$lookup_file %in% config$kept_eqtls,]
 all_snp_gene_pairs$ref_snp = paste(all_snp_gene_pairs$chr, all_snp_gene_pairs$snp.pos, sep="_")
-all_snp_gene_pairs = all_snp_gene_pairs[apply(all_snp_gene_pairs[c("gwas_pvalue", "trait")], 1, FUN=pval_passing, threshold = config$gwas_pval_threshold),]
+all_snp_gene_pairs = all_snp_gene_pairs[apply(all_snp_gene_pairs[c("source_pvalue", "source_trait")], 1, FUN=pval_passing, threshold = config$gwas_pval_threshold),]
 all_snp_gene_pairs = all_snp_gene_pairs[all_snp_gene_pairs$ref_snp %in% unique(all_gwas_snps$ref_snp),]
 all_snp_gene_pairs$locus = group_to_loci(all_snp_gene_pairs$ref_snp)
 
-write_summary(sprintf("Total number of unique genes overlapping GWAS\t%d\n", length(unique(all_snp_gene_pairs$feature))))
-write_summary(sprintf("Total number of unique SNP-gene pairs\t%d\n", length(unique(paste(all_snp_gene_pairs$ref_snp, all_snp_gene_pairs$feature, sep="_")))))
-write_summary(sprintf("Total number of unique locus-gene pairs\t%d\n", length(unique(paste(all_snp_gene_pairs$locus, all_snp_gene_pairs$feature, sep="_")))))
-
-write.table(all_snp_gene_pairs, file=paste(config$out_dir, "all_snp_gene_pairs_prefiltering.txt", sep="/"), quote=FALSE, col.names=TRUE, row.names=FALSE, sep="\t")
 
 ##############################################################################
 ### Count the list of tests we actually tried to run (after eQTL thresholding).
@@ -170,36 +178,45 @@ write.table(all_snp_gene_pairs, file=paste(config$out_dir, "all_snp_gene_pairs_p
 
 testable_snps = read.table(config$coloc_test_list, header=TRUE)
 
-testable_snps$gwas_file = gsub("/users/mgloud/projects/insulin_resistance/", "", testable_snps$gwas_file)
-testable_snps$trait = gsub("/users/mgloud/projects/insulin_resistance/", "", testable_snps$trait)
-testable_snps$eqtl_file = gsub("/users/mgloud/projects/brain_gwas/", "", testable_snps$eqtl_file)
+testable_snps$source_file = testable_snps$source_file
+testable_snps$lookup_file = testable_snps$lookup_file
+testable_snps$source_file = gsub("/users/mgloud/projects/insulin_resistance/", "", testable_snps$source_file)
+testable_snps$source_trait = gsub("/users/mgloud/projects/insulin_resistance/", "", testable_snps$source_trait)
+testable_snps$lookup_file = gsub("/users/mgloud/projects/brain_gwas/", "", testable_snps$lookup_file)
 
-testable_snps = testable_snps[testable_snps$gwas_file %in% config$kept_traits,]
-testable_snps = testable_snps[testable_snps$eqtl_file %in% config$kept_eqtls,]
+testable_snps = testable_snps[testable_snps$source_file %in% config$kept_traits,]
+testable_snps = testable_snps[testable_snps$lookup_file %in% config$kept_eqtls,]
+print(dim(testable_snps))
+
+# A bit of stuff just for more understandable labels
+testable_snps$ensembl = testable_snps$lookup_trait
+testable_snps$ensembl = gsub(":", ".", testable_snps$ensembl)
+
+# Map splice events to the corresponding gene
+splice_indices = grepl("clu", testable_snps$lookup_trait)
+testable_snps$ensembl[splice_indices] = as.character(splice_map$gene[match(testable_snps$ensembl[splice_indices], splice_map$splice_junction)])
+
+# Trim the ensemble version number
+testable_snps$ensembl = sapply(as.character(testable_snps$ensembl), function(x) {strsplit(x, "\\.")[[1]][1]})
 
 testable_snps$ref_snp = paste(testable_snps$chr, testable_snps$snp_pos, sep="_")
-testable_snps = testable_snps[apply(testable_snps[c("gwas_pvalue", "trait")], 1, FUN=pval_passing, threshold = config$gwas_pval_threshold),]
-testable_snps = testable_snps[apply(testable_snps[c("eqtl_pvalue", "eqtl_file")], 1, FUN=pval_passing, threshold = config$eqtl_pval_threshold),]
+testable_snps = testable_snps[apply(testable_snps[c("source_pvalue", "source_trait")], 1, FUN=pval_passing, threshold = config$gwas_pval_threshold),]
+testable_snps = testable_snps[apply(testable_snps[c("lookup_pvalue", "lookup_file")], 1, FUN=pval_passing, threshold = config$eqtl_pval_threshold),]
 testable_snps = testable_snps[testable_snps$ref_snp %in% unique(all_gwas_snps$ref_snp),]
 testable_snps$locus = group_to_loci(testable_snps$ref_snp)
-testable_snps$trait = sapply(as.character(testable_snps$trait), function(x) {s=strsplit(x, "/"); return(s[[1]][length(s[[1]])])})
-
-write_summary(sprintf("Number of testable SNPs after filtering with eQTLs:\t%d\n", length(unique(testable_snps$ref_snp))))
-write_summary(sprintf("Number of testable loci after filtering:\t%d\n", length(unique(testable_snps$locus))))
-write_summary(sprintf("Number of testable genes after filtering:\t%d\n", length(unique(testable_snps$feature))))
-write_summary(sprintf("Number of unique SNP-gene pairs to test after filtering:\t%d\n", length(unique(paste(testable_snps$ref_snp, testable_snps$feature, sep="_")))))
-write_summary(sprintf("Number of unique locus-gene pairs to test after filtering:\t%d\n", length(unique(paste(testable_snps$locus, testable_snps$feature, sep="_")))))
+testable_snps$source_trait = sapply(as.character(testable_snps$source_trait), function(x) {s=strsplit(x, "/"); return(s[[1]][length(s[[1]])])})
+print(dim(testable_snps))
 
 ### How many SNPs per trait are now remaining?
 
-remaining_hits_per_trait = testable_snps %>% group_by(trait) %>% summarize(snp_count = length(unique(ref_snp)))
+remaining_hits_per_trait = testable_snps %>% group_by(source_trait) %>% summarize(snp_count = length(unique(ref_snp)))
 print(data.frame(remaining_hits_per_trait))
 
 # Figure out which SNPs we dropped from the first list by eQTL thresholding
 dropped_snps = all_gwas_snps[!(all_gwas_snps$ref_snp %in% unique(testable_snps$ref_snp)),]
 
 # How many SNPs dropped per trait after applying eQTL filters?
-dropped_hits_per_trait = dropped_snps %>% group_by(trait) %>% summarize(snp_count = length(unique(ref_snp)))
+dropped_hits_per_trait = dropped_snps %>% group_by(source_trait) %>% summarize(snp_count = length(unique(ref_snp)))
 print(dropped_hits_per_trait)
 
 ############################################################
@@ -208,24 +225,13 @@ print(dropped_hits_per_trait)
 
 # We load all the colocalization files.
 
-# Load all files into R for analysis
-max_conceivable_folder_count = 1000000
-folders = rep("", max_conceivable_folder_count)
-i = 1
-for (d in config$coloc_out_dirs)
-{
-	for (folder in dir(d))
-	{
-		folders[i] = paste(d, folder, sep="/")
-		i = i + 1
-	}
-}
-folders = folders[1:i]
-
 tabs = list()
 err_tab = list()
 skip_tab = list()
 i = 1
+
+folders = config$coloc_out_dirs
+
 for (folder in folders)
 {
 	files = dir(folder)
@@ -245,9 +251,9 @@ for (folder in folders)
 
 	for (file in files)
 	{
-		tabs[[i]] = read.table(paste(folder, file, sep="/"), header=TRUE)
+		tabs[[i]] = read.table(paste(folder, file, sep="/"), header=FALSE, col.names=c("ref_snp", "eqtl_file", "gwas_trait", "feature", "n_snps", "clpp", "neg_log_gwas_pval","neg_log_eqtl_pval","base_gwas_file","clpp_mod"))
+		i = i + 1
 	}
-	i = i + 1
 }
 
 results = do.call(rbind, tabs)
@@ -265,20 +271,26 @@ results = results[!duplicated(results),]
 results$base_gwas_file = as.character(results$base_gwas_file)
 results$eqtl_file = as.character(results$eqtl_file)
 
-results$base_gwas_file = gsub("/users/mgloud/projects/insulin_resistance/", "", results$base_gwas_file)
-results$eqtl_file = gsub("/users/mgloud/projects/brain_gwas/", "", results$eqtl_file)
-errors$gwas_file = gsub("/users/mgloud/projects/insulin_resistance/", "", errors$gwas_file)
-errors$eqtl_file = gsub("/users/mgloud/projects/brain_gwas/", "", errors$eqtl_file)
-skips$gwas_file = gsub("/users/mgloud/projects/insulin_resistance/", "", skips$gwas_file)
-skips$eqtl_file = gsub("/users/mgloud/projects/brain_gwas/", "", skips$eqtl_file)
+#results$base_gwas_file = gsub("/users/mgloud/projects/insulin_resistance/", "", results$base_gwas_file)
+#results$eqtl_file = gsub("/users/mgloud/projects/brain_gwas/", "", results$eqtl_file)
+#errors$gwas_file = gsub("/users/mgloud/projects/insulin_resistance/", "", errors$gwas_file)
+#errors$eqtl_file = gsub("/users/mgloud/projects/brain_gwas/", "", errors$eqtl_file)
+#skips$gwas_file = gsub("/users/mgloud/projects/insulin_resistance/", "", skips$gwas_file)
+#skips$eqtl_file = gsub("/users/mgloud/projects/brain_gwas/", "", skips$eqtl_file)
 
 for (alias in names(config$gwas_aliases))
 {
-	results[results$base_gwas_file == alias,]$base_gwas_file = config$gwas_aliases[[alias]]
+	if (alias %in% (unique(results$base_gwas_file)))
+	{
+		results[results$base_gwas_file == alias,]$base_gwas_file = config$gwas_aliases[[alias]]
+	}
 }
 for (alias in names(config$eqtl_aliases))
 {
-	results[results$eqtl_file == alias,]$eqtl_file = config$eqtl_aliases[[alias]]
+	if (alias %in% (unique(results$eqtl_file)))
+	{
+		results[results$eqtl_file == alias,]$eqtl_file = config$eqtl_aliases[[alias]]
+	}
 }
 
 # Filter down to the ones that are in kept traits list
@@ -293,7 +305,14 @@ skips$ref_snp = paste(skips$snp.chrom, skips$snp.pos, sep="_")
 errors$ref_snp = paste(errors$snp.chrom, errors$snp.pos, sep="_")
 
 # A bit of stuff just for more understandable labels
-results$ensembl = sapply(as.character(results$feature), function(x) {strsplit(x, "\\.")[[1]][1]})
+results$ensembl = as.character(results$feature)
+
+# Map splice events to the corresponding gene
+splice_indices = grepl("clu", results$ensembl)
+results$ensembl[splice_indices] = as.character(splice_map$gene[match(results$ensembl[splice_indices], splice_map$splice_junction)])
+
+# Trim the ensemble version number
+results$ensembl = sapply(as.character(results$ensembl), function(x) {strsplit(x, "\\.")[[1]][1]})
 
 results$gwas_short = "none"
 results$eqtl_short = "none"
@@ -312,8 +331,8 @@ if ("eqtl_short_names" %in% names(config))
 	}
 }
 
-results$gwas_pval = 10^(-results$X.log_gwas_pval)
-results$eqtl_pval = 10^(-results$X.log_eqtl_pval)
+results$gwas_pval = 10^(-as.numeric(results$neg_log_gwas_pval))
+results$eqtl_pval = 10^(-as.numeric(results$neg_log_eqtl_pval))
 
 # These ones are dropped because they may have been included at first, but
 # didn't pass our final GWAS / eQTL significance thresholds.
@@ -325,61 +344,49 @@ dim(results)
 
 results$locus = group_to_loci(results$ref_snp)
 
-coloc_passing = results[results$clpp_mod >= as.numeric(config$target_clpp_mod_cutoff),]
+coloc_passing = results[as.numeric(results$clpp_mod) >= as.numeric(config$target_clpp_mod_cutoff),]
+coloc_passing = results[as.numeric(results$n_snps) >= as.numeric(config$target_num_snps),]
+
+#########################################################
+## We need to filter all lists to make sure they've
+## removed the loci that were dropped for coloc analysis
+######################################################### 
+
+# This solves the problem
+testable_snps = testable_snps[testable_snps$ref_snp %in% unique(results$ref_snp),]
+
+#########################################################
+## Now we write summaries to a file
+#########################################################
+
+write_summary(sprintf("Unique GWAS loci:\t%d\n", length(unique(all_gwas_snps$locus))))
+write_summary(sprintf("Total number of unique pairs of SNP and GWAS trait\t%d\n", length(unique(paste(all_gwas_snps$ref_snp, all_gwas_snps$source_trait, sep="_")))))
+write_summary(sprintf("Total number of unique pairs of locus and GWAS trait\t%d\n", length(unique(paste(all_gwas_snps$locus, all_gwas_snps$source_trait, sep="_")))))
+
+write_summary(sprintf("Total number of unique features overlapping GWAS\t%d\n", length(unique(all_snp_gene_pairs$feature))))
+write_summary(sprintf("Total number of unique genes overlapping GWAS\t%d\n", length(unique(all_snp_gene_pairs$ensembl))))
+write_summary(sprintf("Total number of unique SNP-gene pairs\t%d\n", length(unique(paste(all_snp_gene_pairs$ref_snp, all_snp_gene_pairs$ensembl, sep="_")))))
+write_summary(sprintf("Total number of unique locus-gene pairs\t%d\n", length(unique(paste(all_snp_gene_pairs$locus, all_snp_gene_pairs$ensembl, sep="_")))))
+
+write_summary(sprintf("Number of testable SNPs after filtering with eQTLs:\t%d\n", length(unique(testable_snps$ref_snp))))
+write_summary(sprintf("Number of testable loci after filtering:\t%d\n", length(unique(testable_snps$locus))))
+write_summary(sprintf("Number of testable features after filtering:\t%d\n", length(unique(testable_snps$lookup_trait))))
+write_summary(sprintf("Number of testable genes after filtering:\t%d\n", length(unique(testable_snps$ensembl))))
+write_summary(sprintf("Number of unique SNP-gene pairs to test after filtering:\t%d\n", length(unique(paste(testable_snps$ref_snp, testable_snps$ensembl, sep="_")))))
+write_summary(sprintf("Number of unique locus-gene pairs to test after filtering:\t%d\n", length(unique(paste(testable_snps$locus, testable_snps$ensembl, sep="_")))))
 
 write_summary(sprintf("Number of colocalized lead SNPs:\t%d\n", length(unique(coloc_passing$ref_snp))))
 write_summary(sprintf("Number of colocalized loci:\t%d\n", length(unique(coloc_passing$locus))))
-write_summary(sprintf("Number of colocalized genes:\t%d\n", length(unique(coloc_passing$feature))))
-write_summary(sprintf("Number of colocalized SNP-gene pairs:\t%d\n", length(unique(paste(coloc_passing$ref_snp, coloc_passing$feature, sep="_")))))
-write_summary(sprintf("Number of colocalized locus-gene pairs:\t%d\n", length(unique(paste(coloc_passing$locus, coloc_passing$feature, sep="_")))))
+write_summary(sprintf("Number of colocalized features:\t%d\n", length(unique(coloc_passing$feature))))
+write_summary(sprintf("Number of colocalized genes:\t%d\n", length(unique(coloc_passing$ensembl))))
+write_summary(sprintf("Number of colocalized SNP-gene pairs:\t%d\n", length(unique(paste(coloc_passing$ref_snp, coloc_passing$ensembl, sep="_")))))
+write_summary(sprintf("Number of colocalized locus-gene pairs:\t%d\n", length(unique(paste(coloc_passing$locus, coloc_passing$ensembl, sep="_")))))
 
+write.table(all_gwas_snps, file=paste(config$out_dir, "all_gwas_snps.txt", sep="/"), quote=FALSE, col.names=TRUE, row.names=FALSE, sep="\t")
+write.table(all_snp_gene_pairs, file=paste(config$out_dir, "all_snp_gene_pairs_prefiltering.txt", sep="/"), quote=FALSE, col.names=TRUE, row.names=FALSE, sep="\t")
 
-#########################################################
-### QC stuff: troubleshooting failed tests
-#########################################################
-
-### How many SNPs were dropped during the colocalization analysis?
-dropped = testable_snps[!(testable_snps$ref_snp %in% unique(results$ref_snp)),]
-print("Tests dropped:")
-dim(dropped)[1]
-print("SNP-gene pairs dropped:")
-sum(!duplicated(dropped[c("ref_snp", "feature")]))
-print("SNPs dropped:")
-length(unique(dropped$ref_snp))
-
-### Which SNPs were tested even though they don't appear to pass the required threshold in any tissue?
-
-# NOTE: I think this section only matters if we're running the mode where we fill the matrix, allowing all
-# SNPs to be tested if they end up significant in any trait whatsoever. But the above filters may be problematic
-# in such a case...the bottom line is that for the final generalizable version, I should choose one as the
-# default and then add the other option (probably "matrix-filling") as a user-definable parameter
-
-# Why? (Since we apply a filter at the beginning, this suggests that
-# they've been dropped because their lead variant was not measured in the eQTL study.)
-
-best_pvals = results %>% group_by(ref_snp, feature) %>% summarize(best_gwas_pval = max(X.log_gwas_pval), best_eqtl_pval = max(X.log_eqtl_pval))
-
-best_pvals$best_gwas = sapply(1:dim(best_pvals)[1], function(i)
-       {
-		gene = best_pvals$feature[i]
-       		pval = best_pvals$best_gwas_pval[i]
-	        snp = best_pvals$ref_snp[i]
-
-		best_pval = paste(unique(results[results$ref_snp == snp & abs(results$X.log_gwas_pval - pval) <= 0.01 & results$feature == gene,]$base_gwas_file), collapse="-")
-
-
-		return(best_pval)
-       })
-
-best_pvals$best_eqtl = sapply(1:dim(best_pvals)[1], function(i)
-       {
-		gene = best_pvals$feature[i]
-       		pval = best_pvals$best_eqtl_pval[i]
-	        snp = best_pvals$ref_snp[i]
-
-		best_pval = paste(unique(results[results$ref_snp == snp & abs(results$X.log_eqtl_pval - pval) <= 0.01 & results$feature == gene,]$eqtl_file), collapse="-")
-		return(best_pval)
-       })
+# TODO: Note this part is really slow, might want to come up with a faster way of achieving this
+# I think though, it's just because there are a ton of files to look through, so not much way around that.
 
 # For later, we'll also want to know all traits in which the GWAS and the eQTL p-values were significant.
 results$all_sig_gwas = sapply(1:dim(results)[1], function(i)
@@ -403,101 +410,5 @@ results$all_sig_eqtl = sapply(1:dim(results)[1], function(i)
 		return(paste(unique(eqtl_sig$eqtl_file), collapse=";"))
 	}
 )
-
-### Get the list of SNPs that shouldn't have actually been tested 
-
-# For these, the lead eQTL or GWAS SNP
-# was dropped during the intersection phase.
-
-best_pvals$best_eqtl_pval_true = 10^(-best_pvals$best_eqtl_pval)
-best_pvals$best_gwas_pval_true = 10^(-best_pvals$best_gwas_pval)
-
-insignificant_eqtl = best_pvals[!apply(best_pvals[c("best_eqtl_pval_true", "best_eqtl")], 1, FUN=pval_passing, threshold = config$eqtl_pval_threshold),]
-insignificant_gwas = best_pvals[!apply(best_pvals[c("best_gwas_pval_true", "best_gwas")], 1, FUN=pval_passing, threshold = config$gwas_pval_threshold),]
-
-print(dim(insignificant_eqtl)[1])
-print(insignificant_eqtl)
-print(dim(insignificant_gwas)[1])
-print(insignificant_gwas)
-
-# Note: If we want to follow up on a particular gene to see why it was dropped, we
-# can do it like so:
-# one_insig = results[(results$feature == "ENSG00000002919.10") & (results$ref_snp == "17_46292923"),]
-
-### Filter our results table to exclude the SNPs that are no longer significant.
-
-print("Results table dimension:")
-dim(results)[1]
-results = results[!(paste(results$ref_snp, results$feature, sep="_") %in% paste(insignificant_eqtl$ref_snp, insignificant_eqtl$feature, sep="_")),]
-results = results[!(paste(results$ref_snp, results$feature, sep="_") %in% paste(insignificant_gwas$ref_snp, insignificant_gwas$feature, sep="_")),]
-print("Results table dimension after filtering insignificant SNPs:")
-dim(results)[1]
-
-# Now that we have the final list of colocalization results,
-# we can assign a unique locus number to each locus, grouping
-# nearby SNPs.
-results$locus = group_to_loci(results$ref_snp)
-
-### Which SNPs were not tested for all trait-tissue combos? 
-
-# Why? (Maybe due to errors while running the pipeline -- see if these errors
-# are excusable.)
-
-tests_per_pair = results %>% group_by(ref_snp, feature) %>% summarize(tests = length(feature))
-missing_pairs = tests_per_pair[tests_per_pair$tests < (length(unique(results$eqtl_file)) * length(unique(results$base_gwas_file))),]
-print("Total number of snp-gene pairs tested:")
-dim(tests_per_pair)[1]
-print("Total number of snp-gene pairs missing at least one trait-tissue combo:")
-dim(missing_pairs)[1]
-all_missing_tests = results[paste(results$ref_snp, results$feature, sep="_") %in% paste(missing_pairs$ref_snp, missing_pairs$feature, sep="_"),]
-
-#I manually inspected the tests that were dropped. Based on the number of tests missed
-#for each locus, it's clear that dropped SNPs either occurred because the gene was not
-#tested for eQTLs in every trait, or because the GWAS summary stats at that locus had no overlap with the
-#eQTL summary statistics for at least one of the GWAS analyses.
-
-# For a bit more detail...
-
-### Why are tests missing for some SNP-gene pairs?
-
-# For snp-gene pairs that have missing tests, is it because there was an error thrown in the pipeline,
-# or because the variant was intentionally skipped due to non-overlap or being on the edge of the range?
-
-missing_pairs$error = paste(missing_pairs$ref_snp, missing_pairs$feature, sep="_") %in% unique(paste(errors$snp.chrom, errors$snp.pos, errors$restrict_gene, sep="_"))
-missing_pairs$skip = paste(missing_pairs$ref_snp, missing_pairs$feature, sep="_") %in% unique(paste(skips$snp.chrom, skips$snp.pos, skips$feature, sep="_"))
-sum(missing_pairs$error)
-sum(missing_pairs$skip)
-# Reasons why some combinations of trait-tissue at SNP-gene combos in our test set were skipped
-table(skips$error)
-
-# Based on the QC checks here, I'm confident that we're not missing any tests for unexplainable reasons.
-
-# After performing all of these checks, we're ready to go on to the main colocalization analysis.
-
-if (FALSE)
-{
-	missing_pairs$reason_missing = sapply(1:dim(missing_pairs)[1], function(i)
-	       {
-			snp = missing_pairs$ref_snp[i]
-			gene = missing_pairs$feature[i]
-			sub = results[(results$ref_snp == snp) & (results$feature == gene),]
-			
-			code = 0
-			# TODO: If we restore this code for "full matrix" form,
-			# then we should substitute the numbers for something in config file
-			if(length(unique(sub$eqtl_file)) < 4)
-			{
-				code = code + 1
-			}
-			if(length(unique(sub$gwas_trait)) < 9)
-			{
-				code = code + 2
-			}
-			return(code)
-
-	       })
-
-	write.table(missing_pairs[c("ref_snp", "feature", "reason_missing")], file=paste(config$out_dir, "all_missing_pairs_explained.txt", sep="/"), quote=FALSE, sep="\t", col.names=TRUE, row.names=FALSE)
-}
 
 write.table(results, file=paste(config$out_dir, "full_coloc_results_qced.txt", sep="/"), quote=FALSE, sep="\t", col.names=TRUE, row.names=FALSE)
