@@ -3,28 +3,24 @@
 
 require(qvalue)
 
+coloc_results_file = "output/post_coloc/2020-05-11/refiltered/eqtls_and_sqtls/full_coloc_results_qced.txt" 
+
 # TODO: Fix path
-results = read.csv("output/full_coloc_results_qced.txt", sep=",")
-results$gwas_p = 10^(-results$X.log_gwas_pval)
-results$eqtl_p = 10^(-results$X.log_eqtl_pval)
+results = read.table(coloc_results_file, sep="\t", header=TRUE)
+results$gwas_p = 10^(-results$neg_log_gwas_pval)
+results$eqtl_p = 10^(-results$neg_log_eqtl_pval)
+
+sqtl = results[grepl("sQTL", results$eqtl_file),]
+eqtl = results[grepl("eQTL", results$eqtl_file),]
+
 
 # Quantiles for various cutoffs
 quantile(results$clpp_mod, seq(0,1,by=0.05))
-quantile(results[(results$X.log_gwas_pval > -log10(5e-8)) & (results$X.log_eqtl_pval > -log10(1e-5)),]$clpp_mod, seq(0,1,by=0.05))
-quantile(results[(results$X.log_gwas_pval > -log10(1e-5)) & (results$X.log_eqtl_pval > -log10(1e-5)),]$clpp_mod, seq(0,1,by=0.05))
-quantile(results[(results$X.log_gwas_pval > -log10(5e-8)) & (results$X.log_eqtl_pval > -log10(1e-6)),]$clpp_mod, seq(0,1,by=0.05))
-
-filtered = results[(results$X.log_gwas_pval > -log10(5e-8)) & (results$X.log_eqtl_pval > -log10(1e-6)),]
+quantile(sqtl$clpp_mod, seq(0,1,by=0.05))
+quantile(eqtl$clpp_mod, seq(0,1,by=0.05))
 
 # Histogram of values
 hist(1-results$clpp)
 hist(1-results$clpp_mod)
 
-hist(1-filtered$clpp)
-hist(1-filtered$clpp_mod)
-
-qvalue(p=1-results$clpp)
-qvalue(p=1-results$clpp_mod)
-qvalue(p=1-filtered$clpp)
-qvalue(p=1-filtered$clpp_mod)
 
