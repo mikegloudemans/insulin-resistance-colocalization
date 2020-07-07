@@ -32,6 +32,13 @@ names(genes) = c("ensembl", "hgnc")
 genes = genes[!duplicated(genes$ensembl),]
 results = merge(genes, results, all.y=TRUE)
 
+results$hgnc = as.character(results$hgnc)
+results$ensembl = as.character(results$ensembl)
+
+results$hgnc[is.na(results$hgnc)]=results$ensembl[is.na(results$hgnc)]
+results$hgnc[results$hgnc==""]=results$ensembl[results$hgnc==""]
+
+
 # Load rsIDs -- here, we'll use a simple lookup in the 1Kgenomes file
 rsids = results[!duplicated(results$ref_snp),][c("ref_snp", "chr", "pos")]
 rsids$rsid = sapply(1:dim(rsids)[1], function(i)
