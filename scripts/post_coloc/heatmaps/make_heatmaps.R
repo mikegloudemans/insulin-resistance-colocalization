@@ -58,12 +58,6 @@ main = function()
 		}
 		coloc_res_tmp$split_column = factor(coloc_res_tmp$split_column)
 
-		# Remove rows (gene-locus pairs) with no colocs at all, if desired
-		if (strat$concise == "True")
-		{
-			coloc_res_tmp = coloc_res_tmp %>% filter(blanks != "blank")
-		}
-
 		# Do collapsing of certain GWAS into a single trait
 	        # if desired
 
@@ -77,32 +71,42 @@ main = function()
 			coloc_res_tmp$gwas_label = factor(x=coloc_res_tmp$gwas_label, levels=strat$gwas_remapping$new_order)
 		}
 
-		# If there are multiple SNPs at the same locus, then
-		# just pick the one with the highest CLPP mod
-		coloc_res_tmp = coloc_res_tmp %>% arrange(-clpp_mod)
-		coloc_res_tmp = coloc_res_tmp[!duplicated(coloc_res_tmp[,c("locus", "ensembl", "gwas_label", "tissue")]),]
-
 		coloc_res_tmp = collapse_axis_factors(coloc_res_tmp)
 
-		coloc_res_tmp = coloc_res_tmp %>% arrange(y_factor)
-	
+		# Classify the coloc results to determine what color they'll be in the plot
+		coloc_res_tmp$coloc_class = get_heatmap_classes(coloc_res_tmp)
 
-		# TODO: Also there should be an x-axis collapsing step and a y-axis collapsing step
-			# and they should both occur OUTSIDE of the plotting function as it's shown right now
-			# since it's not relevant here
-		
+		# Find locus-gene pairs with no coloc at all
+		# Label rows as "blank" if they have no matches, so we can leave them out of plots
+		coloc_res_tmp$blanks = ""
+		for (y_factor in unique(coloc_res_tmp$y_factor))
+		{
+			locus_matches = coloc_res_tmp[coloc_res_tmp$y_factor == y_factor,]
+			if (sum(locus_matches$coloc_class!="none") == 0)
+			{
+				coloc_res_tmp$blanks[(coloc_res_tmp$y_factor == y_factor)] = "blank"
+			}
+			else
+			{
+				coloc_res_tmp$blanks[(coloc_res_tmp$y_factor == y_factor)] = "okay"
+			}	
+		}
+
+		# Remove rows (gene-locus pairs) with no colocs at all, if desired
+		if (strat$concise == "True")
+		{
+			coloc_res_tmp = coloc_res_tmp %>% filter(blanks != "blank")
+		}
+
+		# If there are multiple SNPs in the same plot cell, then
+		# just pick the one with the highest CLPP mod
+		coloc_res_tmp = coloc_res_tmp %>% arrange(-clpp_mod)
+		coloc_res_tmp = coloc_res_tmp[!duplicated(coloc_res_tmp[,c("x_factor", "y_factor")]),]
+
 		### Plot coloc results
 		plot_heatmap(coloc_res_tmp, strat$out_dir)
 	}
 
-	# Other things:
-	# collapse across loci
-	# collapse across tissues
-	# collapse across traits
-	# collapse across tissues and traits
-	# collapse across tissues and traits and loci
-
-	# Since these are all just single steps, I'm sure there's a more generalizable way of doing it...
 }
 
 ######################################################
@@ -149,9 +153,6 @@ get_coloc_results = function(coloc_file)
 	}
 	coloc_res$tissue = factor(x=coloc_res$tissue, levels=config$tissue_order)
 
-	# Classify the coloc results to determine what color they'll be in the plot
-	coloc_res$coloc_class = get_heatmap_classes(coloc_res, config)
-
 	# Label the GWAS'es with short and readable tags
 	coloc_res$gwas_label = ""
 	for (file in names(config$gwas_labels))
@@ -159,27 +160,6 @@ get_coloc_results = function(coloc_file)
 		coloc_res$gwas_label[coloc_res$base_gwas_file == file] = config$gwas_labels[[file]]
 	}
 	coloc_res$gwas_label = factor(x=coloc_res$gwas_label, levels=config$gwas_order)
-
-	# Find locus-gene pairs with no coloc at all
-	# Label rows as "blank" if they have no matches, so we can leave them out of plots
-	coloc_res$blanks = ""
-	for (locus in unique(coloc_res$locus))
-	{
-		locus_matches = coloc_res[coloc_res$locus == locus,]
-		for (ensembl in unique(locus_matches$ensembl))
-		{
-			gene_locus_matches = locus_matches[locus_matches$ensembl == ensembl,]
-			
-			if (sum(gene_locus_matches$coloc_class!="none") == 0)
-			{
-				coloc_res$blanks[(coloc_res$locus == locus) & (coloc_res$ensembl == ensembl)] = "blank"
-			}
-			else
-			{
-				coloc_res$blanks[(coloc_res$locus == locus) & (coloc_res$ensembl == ensembl)] = "okay"
-			}	
-		}
-	}
 
 	if (("mark_dubious_results" %in% names(config)) && (config$mark_dubious_results == "True"))
 	{
@@ -232,25 +212,31 @@ plot_heatmap = function(coloc_res, out_sub_folder)
 	dir.create(paste0(plot_out_dir, "/", out_sub_folder), recursive = TRUE, showWarnings=FALSE)
 	for (i in 1:length(levels(coloc_res[["split_column"]])))
 	{
-		tmp_data=coloc_res %>% mutate(trait_tissue=factor(paste(gwas_label,tissue, sep = '-'), levels = as.vector(t(outer(levels(gwas_label), levels(tissue), FUN = "paste", sep="-"))))) %>% 
-				      mutate(locus_snp_gene=paste(locus, hgnc, sep = '-')) %>% 
-				      filter(coloc_res[["split_column"]] == levels(coloc_res[["split_column"]])[i])
+		tmp_data=coloc_res %>% 
+			filter(coloc_res[["split_column"]] == levels(coloc_res[["split_column"]])[i])
 		
-		row_count = length(unique(tmp_data$locus))
+		row_count = length(unique(tmp_data$y_factor))
 
 		max_chunk = floor(row_count / chunk_size + 1)
 
 		for (chunk in 1:max_chunk)
 		{
-			tmp_chunk = tmp_data[tmp_data$locus %in% unique(tmp_data$locus)[(1+(chunk-1)*chunk_size):min(chunk_size*chunk, row_count)],]
+			tmp_chunk = tmp_data[tmp_data$y_factor %in% unique(tmp_data$y_factor)[(1+(chunk-1)*chunk_size):min(chunk_size*chunk, row_count)],]
 
 			# Genes per locus
-			genes_per_locus = tmp_chunk %>% group_by(locus) %>% summarize(genes_at_locus=length(unique(locus_snp_gene))) %>% arrange(locus)
+			genes_per_locus = tmp_chunk %>% group_by(locus) %>% summarize(genes_at_locus=length(unique(y_factor))) %>% arrange(locus)
 
-			num_cols = length(levels(tmp_chunk$trait_tissue))
-			num_tissues = length(unique(coloc_res$tissue))
+			num_cols = length(levels(tmp_chunk$x_factor))
+			if (("x_axis_collapse" in names(config)) && ((config$x_axis_collapse == "tissues") || (config$x_axis_collapse == "tissues-gwas")))
+			{
+				num_tissues = 1
+			}
+			else
+			{
+				num_tissues = length(unique(coloc_res$tissue))
+			}
 			num_vert_bars = num_cols / num_tissues - 1
-			num_rows = length(unique(tmp_chunk$locus_snp_gene))
+			num_rows = length(unique(tmp_chunk$y_factor))
 
 			num_horz_bars = length(unique(tmp_chunk$locus))
 			horz_breaks = cumsum(genes_per_locus$genes_at_locus)
@@ -261,7 +247,7 @@ plot_heatmap = function(coloc_res, out_sub_folder)
 			my.horizontal.lines<-data.frame(x=rep(0.5, num_horz_bars), y=num_rows-horz_breaks+0.5, 
 				xend=rep(num_cols+0.5, num_horz_bars), yend=num_rows - horz_breaks+0.5)
 			
-			plot=plot_coloc_results_function(data = tmp_chunk %>% filter(locus %in% unique(tmp_data$locus)[1:length(unique(tmp_data$locus))]))
+			plot=plot_coloc_results_function(data = tmp_chunk)
 			plot = plot + geom_segment(data=my.vertical.lines, aes(x,y,xend=xend, yend=yend), size=1, inherit.aes=F)
 			plot = plot + geom_segment(data=my.horizontal.lines, aes(x,y,xend=xend, yend=yend), size=0.25, inherit.aes=F)
 			plot
@@ -275,7 +261,7 @@ plot_heatmap = function(coloc_res, out_sub_folder)
 	}
 }
 
-get_heatmap_classes = function(coloc_res, config)
+get_heatmap_classes = function(coloc_res)
 {
 	# TODO: I need to generalize this to other things beyond eqtl and sqtl
 	# Label each locus with a QTL type, to be used for determining colors later
@@ -283,7 +269,7 @@ get_heatmap_classes = function(coloc_res, config)
 	      function(x)
 	      {
 		      tmp = coloc_res[x,]
-		      matches = coloc_res[(coloc_res$locus == tmp$locus) & (coloc_res$tissue == tmp$tissue) & (coloc_res$gwas_trait == tmp$gwas_trait) & (coloc_res$ensembl == tmp$ensembl),]
+		      matches = coloc_res[(coloc_res$x_factor == tmp$x_factor) & (coloc_res$y_factor == tmp$y_factor),]
 
 		      # There are quite a few cases to test for
 		      if ((sum((matches$qtl_type == "eqtl") & (matches$clpp_mod >= 0.4)) > 0) &&
@@ -339,38 +325,30 @@ collapse_axis_factors = function(coloc_file)
 	# Remove all but the best coloc at each locus, regardless of gene
 	if (("y_axis_collapse" %in% names(config)) && (config$y_axis_collapse == "genes"))
 	{
-		coloc_res=coloc_res[!duplicated(coloc_res_tmp[,c("locus", "gwas_label", "tissue")]),]
 		coloc_res$y_factor = coloc_res$locus
-	}
-	else
+	} else
 	{
-		coloc_res$y_factor = paste(coloc_res$locus, coloc_res$ensembl, sep="-")
+		coloc_res$y_factor = paste(coloc_res$locus, coloc_res$hgnc, sep="-")
 	}
 	
 	# Collapse across tissues
 	# Remove all but the best tissue for a given
 	if (("x_axis_collapse" %in% names(config)) && (config$x_axis_collapse == "tissues"))
 	{
-		coloc_res=coloc_res[!duplicated(coloc_res_tmp[,c("x_factor", "gwas_label")]),]
 		coloc_res$x_factor = coloc_res$gwas_label
-	}
-	else if (("x_axis_collapse" %in% names(config)) && (config$x_axis_collapse == "gwas"))
+	} else if (("x_axis_collapse" %in% names(config)) && (config$x_axis_collapse == "gwas"))
 	{
-		coloc_res=coloc_res[!duplicated(coloc_res_tmp[,c("x_factor", "tissue")]),]
 		coloc_res$x_factor = coloc_res$tissue
-	}
-	else if (("x_axis_collapse" %in% names(config)) && (config$x_axis_collapse == "tissues-gwas"))
+	} else if (("x_axis_collapse" %in% names(config)) && (config$x_axis_collapse == "tissues-gwas"))
 	{
-		coloc_res=coloc_res[!duplicated(coloc_res_tmp[,c("x_factor")]),]
 		coloc_res$x_factor = "any"
 		coloc_res$x_factor = factor(coloc_res$x_factor)
-	}
-	else
+	} else
 	{
-		coloc_res$x_factor = paste(coloc_res$gwas_label, coloc_res$eqtl_file, sep="-")
-		as.vector(t(outer(levels(coloc_res$gwas_label), levels(coloc_res$tissue), FUN = "paste", sep="-")))
+		coloc_res$x_factor = paste(coloc_res$gwas_label, coloc_res$tissue, sep="-")
+		coloc_res$x_factor = factor(coloc_res$x_factor, levels = as.vector(t(outer(levels(coloc_res$gwas_label), levels(coloc_res$tissue), FUN = "paste", sep="-"))))
 	}
 	return(coloc_res)
 }
 
-main()
+#main()
