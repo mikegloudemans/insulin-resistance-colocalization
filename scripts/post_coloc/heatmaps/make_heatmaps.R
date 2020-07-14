@@ -13,18 +13,21 @@ require(rjson)
 ################################
 
 # Files
-coloc_file = 'output/post_coloc/2020-05-11/refiltered/eqtls_and_sqtls/clpp_results_categorized_2020-05-11.txt'
-plot_out_dir = "output/post_coloc/plots/heatmaps/"
 
 # Adjustable features
 save_plots=TRUE
 
 # Load config info
-#config_file = commandArgs(trailing=TRUE)[1]
-config_file = "scripts/post_coloc/heatmaps/heatmap_config.config"
+config_file = commandArgs(trailing=TRUE)[1]
 config = fromJSON(file=config_file)
+coloc_file = config$coloc_file
+plot_out_dir = config$out_folder_prefix
 
 chunk_size = 100
+if ("chunk_size" in names(config))
+{
+	chunk_size = as.numeric(config$chunk_size)
+}
 row_height=0.2
 col_width=0.2
 
@@ -103,6 +106,25 @@ main = function()
 		coloc_res_tmp = coloc_res_tmp %>% arrange(-clpp_mod)
 		coloc_res_tmp = coloc_res_tmp[!duplicated(coloc_res_tmp[,c("x_factor", "y_factor")]),]
 
+		coloc_res_tmp = coloc_res_tmp %>% arrange(y_factor)
+
+		if (config$cluster == "True")
+		{
+			# Binarize cells into colocalize or non-colocalized
+			coloc_res_tmp$clust_stat = 0
+			coloc_res_tmp$clust_stat[coloc_res_tmp$coloc_class == "none"] = 1
+
+			dc = dcast(coloc_res_tmp, y_factor ~ x_factor, value.var = "clust_stat")
+			grid = as.matrix(dc[,-1])
+			rownames(grid) = dc[,1]
+			grid[is.na(grid)] = 0
+			
+			dst = dist(dc, method = "binary")
+			h = hclust(dst)
+			
+			coloc_res_tmp$y_factor = factor(coloc_res_tmp$y_factor, levels = rownames(grid)[h$order])
+		}
+
 		### Plot coloc results
 		plot_heatmap(coloc_res_tmp, strat$out_dir)
 	}
@@ -114,7 +136,7 @@ main = function()
 # Function to create tileplot of coloc results
 plot_coloc_results_function=function(data){
   plot=ggplot(data =  data,
-              mapping = aes(x=trait_tissue, y = factor(locus_snp_gene, levels = unique(locus_snp_gene)[length(unique(locus_snp_gene)):1]))) + 
+              mapping = aes(x=x_factor, y = y_factor)) + 
     geom_tile(mapping = aes(fill=coloc_class),color="black") + 
     scale_fill_manual(name="CLPP", values = color_scheme ,drop=FALSE) + 
     geom_text(mapping = aes(label=cross), size=7) +
@@ -210,10 +232,14 @@ mark_dubious_results = function(coloc_res)
 plot_heatmap = function(coloc_res, out_sub_folder)
 {
 	dir.create(paste0(plot_out_dir, "/", out_sub_folder), recursive = TRUE, showWarnings=FALSE)
-	for (i in 1:length(levels(coloc_res[["split_column"]])))
+	splits = unique(levels(coloc_res[["split_column"]]))
+	for (i in 1:length(splits))
 	{
+		split_col = splits[i]
+		print(paste0("Plotting by ", split_col))
+
 		tmp_data=coloc_res %>% 
-			filter(coloc_res[["split_column"]] == levels(coloc_res[["split_column"]])[i])
+			filter(coloc_res[["split_column"]] == splits[i])
 		
 		row_count = length(unique(tmp_data$y_factor))
 
@@ -227,11 +253,10 @@ plot_heatmap = function(coloc_res, out_sub_folder)
 			genes_per_locus = tmp_chunk %>% group_by(locus) %>% summarize(genes_at_locus=length(unique(y_factor))) %>% arrange(locus)
 
 			num_cols = length(levels(tmp_chunk$x_factor))
-			if (("x_axis_collapse" in names(config)) && ((config$x_axis_collapse == "tissues") || (config$x_axis_collapse == "tissues-gwas")))
+			if (("x_axis_collapse" %in% names(config)) && ((config$x_axis_collapse == "tissues") || (config$x_axis_collapse == "tissues-gwas")))
 			{
 				num_tissues = 1
-			}
-			else
+			} else
 			{
 				num_tissues = length(unique(coloc_res$tissue))
 			}
@@ -241,20 +266,27 @@ plot_heatmap = function(coloc_res, out_sub_folder)
 			num_horz_bars = length(unique(tmp_chunk$locus))
 			horz_breaks = cumsum(genes_per_locus$genes_at_locus)
 
-			my.vertical.lines<-data.frame(x=seq(5.5, 5.5+num_tissues*(num_vert_bars-1), by = 5), y = rep(0.5, num_vert_bars), 
-				xend=seq(5.5, 5.5+num_tissues*(num_vert_bars-1), by = 5), yend = rep(num_rows + 0.5, num_vert_bars))
-			
-			my.horizontal.lines<-data.frame(x=rep(0.5, num_horz_bars), y=num_rows-horz_breaks+0.5, 
-				xend=rep(num_cols+0.5, num_horz_bars), yend=num_rows - horz_breaks+0.5)
+			margin_approx_size = 0.2*max(c(nchar(as.character(unique(tmp_chunk$y_factor))), 0))
 			
 			plot=plot_coloc_results_function(data = tmp_chunk)
-			plot = plot + geom_segment(data=my.vertical.lines, aes(x,y,xend=xend, yend=yend), size=1, inherit.aes=F)
-			plot = plot + geom_segment(data=my.horizontal.lines, aes(x,y,xend=xend, yend=yend), size=0.25, inherit.aes=F)
+			
+			if (num_vert_bars != 0)
+			{
+				my.vertical.lines<-data.frame(x=seq(0, num_vert_bars-1, by = num_tissues) + num_tissues + 0.5, y = rep(0.5, num_vert_bars), 
+					xend=seq(0, num_vert_bars-1, by = num_tissues) + num_tissues + 0.5, yend = rep(num_rows + 0.5, num_vert_bars))
+				plot = plot + geom_segment(data=my.vertical.lines, aes(x,y,xend=xend, yend=yend), size=1, inherit.aes=F)
+			}
+			if (num_horz_bars != 0)
+			{
+				my.horizontal.lines<-data.frame(x=rep(0.5, num_horz_bars), y=num_rows-horz_breaks+0.5, 
+					xend=rep(num_cols+0.5, num_horz_bars), yend=num_rows - horz_breaks+0.5)
+				plot = plot + geom_segment(data=my.horizontal.lines, aes(x,y,xend=xend, yend=yend), size=0.25, inherit.aes=F)
+			}
 			plot
 
 			if(save_plots) 
 			{
-				ggsave(filename = paste0(plot_out_dir, '/', out_sub_folder, '/CLPP_group_',levels(coloc_res[["split_column"]])[i],'.part', chunk, '.pdf'), plot = plot, width = 5+(col_width*num_cols), height = 5+(row_height*num_rows), limitsize = F)
+				ggsave(filename = paste0(plot_out_dir, '/', out_sub_folder, '/CLPP_group_',levels(coloc_res[["split_column"]])[i],'.part', chunk, '.pdf'), plot = plot, width = margin_approx_size+(col_width*num_cols), height = margin_approx_size+(row_height*num_rows), limitsize = F)
 			}
 			
 		}
@@ -330,6 +362,9 @@ collapse_axis_factors = function(coloc_file)
 	{
 		coloc_res$y_factor = paste(coloc_res$locus, coloc_res$hgnc, sep="-")
 	}
+
+	coloc_res = coloc_res %>% arrange(as.numeric(coloc_res$locus))
+	coloc_res$y_factor = factor(coloc_res$y_factor, levels = rev(unique(coloc_res$y_factor)))
 	
 	# Collapse across tissues
 	# Remove all but the best tissue for a given
@@ -348,7 +383,9 @@ collapse_axis_factors = function(coloc_file)
 		coloc_res$x_factor = paste(coloc_res$gwas_label, coloc_res$tissue, sep="-")
 		coloc_res$x_factor = factor(coloc_res$x_factor, levels = as.vector(t(outer(levels(coloc_res$gwas_label), levels(coloc_res$tissue), FUN = "paste", sep="-"))))
 	}
+	# No need to sort on the x-axis, because the desired orders have already been pre-specified
+	
 	return(coloc_res)
 }
 
-#main()
+main()
