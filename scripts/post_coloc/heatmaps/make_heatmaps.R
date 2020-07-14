@@ -24,7 +24,7 @@ coloc_file = config$coloc_file
 plot_out_dir = config$out_folder_prefix
 
 chunk_size = 100
-if ("chunk_size" in names(config))
+if ("chunk_size" %in% names(config))
 {
 	chunk_size = as.numeric(config$chunk_size)
 }
@@ -157,11 +157,6 @@ get_coloc_results = function(coloc_file)
 	# Read coloc results
 	coloc_res=as.data.frame(fread(file = coloc_file, sep = '\t', header = T, check.names = F))
 
-	# NOTE: these lines are no longer necessary if the latest version of aggregate_coloc_results.R
-	# was used to generate the input file
-	#coloc_res$hgnc[is.na(coloc_res$hgnc)]=coloc_res$ensembl[is.na(coloc_res$hgnc)]
-	#coloc_res$hgnc[coloc_res$hgnc==""]=coloc_res$ensembl[coloc_res$hgnc==""]
-
 	# Identify the QTL type and tissue for each coloc test
 	coloc_res$qtl_type = ""
 	coloc_res$tissue = ""
@@ -272,8 +267,8 @@ plot_heatmap = function(coloc_res, out_sub_folder)
 			
 			if (num_vert_bars != 0)
 			{
-				my.vertical.lines<-data.frame(x=seq(0, num_vert_bars-1, by = num_tissues) + num_tissues + 0.5, y = rep(0.5, num_vert_bars), 
-					xend=seq(0, num_vert_bars-1, by = num_tissues) + num_tissues + 0.5, yend = rep(num_rows + 0.5, num_vert_bars))
+				my.vertical.lines<-data.frame(x=seq(0, (num_vert_bars-1)*num_tissues, by = num_tissues) + num_tissues + 0.5, y = rep(0.5, num_vert_bars), 
+					xend=seq(0, (num_vert_bars-1)*num_tissues, by = num_tissues) + num_tissues + 0.5, yend = rep(num_rows + 0.5, num_vert_bars))
 				plot = plot + geom_segment(data=my.vertical.lines, aes(x,y,xend=xend, yend=yend), size=1, inherit.aes=F)
 			}
 			if (num_horz_bars != 0)

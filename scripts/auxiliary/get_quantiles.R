@@ -15,12 +15,25 @@ eqtl = results[grepl("eQTL", results$eqtl_file),]
 
 
 # Quantiles for various cutoffs
-quantile(results$clpp_mod, seq(0,1,by=0.05))
-quantile(sqtl$clpp_mod, seq(0,1,by=0.05))
-quantile(eqtl$clpp_mod, seq(0,1,by=0.05))
+allq = round(quantile(results$clpp_mod, seq(0,1,by=0.05)),4)
+sq = round(quantile(sqtl$clpp_mod, seq(0,1,by=0.05)),4)
+eq = round(quantile(eqtl$clpp_mod, seq(0,1,by=0.05)),4)
+
+dat = data.frame(quant=seq(0,1,by=0.05), all=allq, sqtl=sq, eqtl=eq)
+print(dat)
+
+# Quantiles for various cutoffs
+allq = round(quantile(results$clpp, seq(0,1,by=0.05)),4)
+sq = round(quantile(sqtl$clpp, seq(0,1,by=0.05)),4)
+eq = round(quantile(eqtl$clpp, seq(0,1,by=0.05)),4)
+
+dat = data.frame(quant=seq(0,1,by=0.05), all=allq, sqtl=sq, eqtl=eq)
+print(dat)
+
+
 
 # Histogram of values
-hist(1-results$clpp)
+#hist(1-results$clpp)
 hist(1-results$clpp_mod)
 
 
