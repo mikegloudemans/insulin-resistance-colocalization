@@ -1,8 +1,8 @@
 require(rjson)
 
 out_dir = "output/post_coloc/plots/heatmaps/" 
-#config_template = "scripts/post_coloc/heatmaps/heatmap_config_template.config"
-config_template = "scripts/post_coloc/heatmaps/heatmap_config_template_test.config"
+config_template = "scripts/post_coloc/heatmaps/heatmap_config_template.config"
+#config_template = "scripts/post_coloc/heatmaps/heatmap_config_template_test.config"
 json_out_file = "scripts/post_coloc/heatmaps/tmp_config.config"
 
 rscript_file = "scripts/post_coloc/heatmaps/make_heatmaps.R"

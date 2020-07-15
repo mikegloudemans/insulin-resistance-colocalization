@@ -1,12 +1,12 @@
 ### All code by Brunilda Balliu 12/21/2019
 # Updated by Mike Gloudemans 6/18/2020
 
-library(ggplot2)
-library(data.table)
-library(dplyr)
-library(reshape2)
-library(tidyr)
-require(rjson)
+suppressWarnings(suppressMessages(library(ggplot2)))
+suppressWarnings(suppressMessages(library(data.table)))
+suppressWarnings(suppressMessages(library(dplyr)))
+suppressWarnings(suppressMessages(library(reshape2)))
+suppressWarnings(suppressMessages(library(tidyr)))
+suppressWarnings(suppressMessages(require(rjson)))
 
 ################################
 # Key variables
@@ -37,7 +37,10 @@ source("scripts/post_coloc/figures/color_scheme.R")
 ################################
 
 main = function()
-{
+{	
+	# Catch config errors at the beginning rather than after wasting a lot of time
+	validate_config(config)
+
 	coloc_res = get_coloc_results(coloc_file)
 
 	coloc_res = coloc_res %>% arrange(-clpp_mod)
@@ -74,6 +77,14 @@ main = function()
 			coloc_res_tmp$gwas_label = factor(x=coloc_res_tmp$gwas_label, levels=strat$gwas_remapping$new_order)
 		}
 
+		if ("gwas_blacklist" %in% names(strat))
+		{
+			for (bl in strat$gwas_blacklist)
+			{
+				coloc_res_tmp = coloc_res_tmp[coloc_res_tmp$gwas_label != bl,]
+			}
+		}
+
 		coloc_res_tmp = collapse_axis_factors(coloc_res_tmp)
 
 		# Classify the coloc results to determine what color they'll be in the plot
@@ -96,7 +107,7 @@ main = function()
 		}
 
 		# Remove rows (gene-locus pairs) with no colocs at all, if desired
-		if (strat$concise == "True")
+			if (strat$concise == "True")
 		{
 			coloc_res_tmp = coloc_res_tmp %>% filter(blanks != "blank")
 		}
@@ -119,7 +130,8 @@ main = function()
 			rownames(grid) = dc[,1]
 			grid[is.na(grid)] = 0
 			
-			dst = dist(dc, method = "binary")
+			dst = suppressWarnings(dist(dc, method = "binary"))
+			dst[is.na(dst)] = 1
 			h = hclust(dst)
 			
 			coloc_res_tmp$y_factor = factor(coloc_res_tmp$y_factor, levels = rownames(grid)[h$order])
@@ -178,50 +190,68 @@ get_coloc_results = function(coloc_file)
 	}
 	coloc_res$gwas_label = factor(x=coloc_res$gwas_label, levels=config$gwas_order)
 
-	if (("mark_dubious_results" %in% names(config)) && (config$mark_dubious_results == "True"))
+	if (("label_individual_cells" %in% names(config)) && (config$label_individual_cells == "True"))
 	{
 		# IF annotating with crosses and other marks to denote which ones 
 		# aren't trustworthy, do it here.
-		coloc_res = mark_dubious_results(coloc_res)
+		coloc_res = label_individual_cells(coloc_res)
 	}
 	else
 	{
 		coloc_res$cross = ""
 		coloc_res$cross_col = ""
-		coloc_res$cross = factor(coloc_res$cross)
-		coloc_res$cross_col = factor(coloc_res$cross_col)
 	}
+
+	coloc_res$cross = factor(coloc_res$cross)
+	coloc_res$cross_col = factor(coloc_res$cross_col)
 
 	return(coloc_res)
 }
 
-mark_dubious_results = function(coloc_res)
+label_individual_cells = function(coloc_res)
 {
-	# TODO: Make this more general
+	# Annotate results by significance of GWAS and eQTL hits
 
-	# Annotate resuls by significance of GWAS and eQTL hits
-	coloc_res$cross=" "
-	coloc_res$cross_col=NA
+	coloc_res_tmp = coloc_res
 
-	# Significant in both
-	coloc_res$cross_col[coloc_res$min_gwas_pval <= 5e-08 & coloc_res$min_eqtl_pval <= 1e-05] = "GWAS P <= 5e-08; eQTL P <= 1e-05"
+	coloc_res_tmp$cross=" "
+	coloc_res_tmp$cross_col=NA
 
-	# "Borderline" significant GWAS
-	coloc_res$cross[(coloc_res$min_gwas_pval > 5e-08) & (coloc_res$min_gwas_pval <= 5e-05) & (coloc_res$min_eqtl_pval <= 1e-05)] = "X"
-	coloc_res$cross_col[(coloc_res$min_gwas_pval > 5e-08) & (coloc_res$min_gwas_pval <= 5e-05) & (coloc_res$min_eqtl_pval <= 1e-05)] = "5e-08 < GWAS P <= 5e-05; eQTL P <= 1e-05"
+	for (i in 1:length(config$label_cells_key))
+	{
+		class = config$label_cells_key[[i]]
 
-	# Insignificant GWAS
-	coloc_res$cross[coloc_res$min_gwas_pval > 5e-05] = "Z"
-	coloc_res$cross_col[coloc_res$min_gwas_pval > 5e-05] = "GWAS P > 5e-05"
+		subset = rep(TRUE, dim(coloc_res_tmp)[1])
+		
+		if ("gwas_max" %in% names(class))
+		{
+			subset[coloc_res_tmp$min_gwas_pval < as.numeric(class$gwas_max)] = FALSE
+		}	
+		if ("gwas_min" %in% names(class))
+		{
+			subset[coloc_res_tmp$min_gwas_pval >= as.numeric(class$gwas_min)] = FALSE
+		}	
+		if ("eqtl_max" %in% names(class))
+		{
+			subset[coloc_res_tmp$min_eqtl_pval < as.numeric(class$eqtl_max)] = FALSE
+		}	
+		if ("eqtl_min" %in% names(class))
+		{
+			subset[coloc_res_tmp$min_eqtl_pval >= as.numeric(class$eqtl_min)] = FALSE
+		}	
+		if ("snp_max" %in% names(class))
+		{
+			subset[coloc_res_tmp$n_snps < as.numeric(class$snp_max)] = FALSE
+		}	
+		if ("snp_min" %in% names(class))
+		{
+			subset[coloc_res_tmp$n_snps >= as.numeric(class$snp_min)] = FALSE
+		}
+		coloc_res_tmp$cross[subset] = class$mark_char
+		coloc_res_tmp$cross_col[subset] = class$caption
+	}
 
-	coloc_res$cross[coloc_res$min_gwas_pval <= 5e-05 & coloc_res$min_eqtl_pval > 1e-05] = "Z"
-	coloc_res$cross_col[coloc_res$min_gwas_pval <= 5e-05 & coloc_res$min_eqtl_pval > 1e-05] = "GWAS P <= 5e-05; eQTL P >= 1e-05"
-
-	# Less than 20 SNPs around locus
-	coloc_res$cross[coloc_res$n_snps <= 20] = "S"
-	coloc_res$cross_col[coloc_res$n_snps <= 20] = "N <=20"
-
-	coloc_res$cross_col=factor(coloc_res$cross_col, levels = c("GWAS P <= 5e-08; eQTL P <= 1e-05", "5e-08 < GWAS P <= 5e-05; eQTL P <= 1e-05", "GWAS P > 5e-05", "GWAS P <= 5e-05; eQTL P >= 1e-05", "N <=20"))
+	return(coloc_res_tmp)
 } 
 
 plot_heatmap = function(coloc_res, out_sub_folder)
@@ -231,7 +261,8 @@ plot_heatmap = function(coloc_res, out_sub_folder)
 	for (i in 1:length(splits))
 	{
 		split_col = splits[i]
-		print(paste0("Plotting by ", split_col))
+		
+		#print(paste0("Plotting by ", split_col))
 
 		tmp_data=coloc_res %>% 
 			filter(coloc_res[["split_column"]] == splits[i])
@@ -258,7 +289,16 @@ plot_heatmap = function(coloc_res, out_sub_folder)
 			num_vert_bars = num_cols / num_tissues - 1
 			num_rows = length(unique(tmp_chunk$y_factor))
 
-			num_horz_bars = length(unique(tmp_chunk$locus))
+			if ((("cluster" %in% names(config)) && (config$cluster == "True")) ||
+			    (("y_axis_collapse" %in% names(config)) && (config$y_axis_collapse == "genes")))
+			{
+				# It doesn't make sense to separate loci if they're clustered
+				# It also doesn't make sense to separate loci if each row is a distinct locus
+				num_horz_bars = 0
+			} else 
+			{
+				num_horz_bars = length(unique(tmp_chunk$locus))
+			}
 			horz_breaks = cumsum(genes_per_locus$genes_at_locus)
 
 			margin_approx_size = 0.2*max(c(nchar(as.character(unique(tmp_chunk$y_factor))), 0))
@@ -381,6 +421,19 @@ collapse_axis_factors = function(coloc_file)
 	# No need to sort on the x-axis, because the desired orders have already been pre-specified
 	
 	return(coloc_res)
+}
+
+validate_config = function(config)
+{
+
+	if ( ("label_individual_cells" %in% names(config)) && 
+	    (config$label_individual_cells == "True") && 
+	    (!(("label_cells_key") %in% names(config))))
+	{
+		print("'label_individual_cells' requested in config, but no 'label_cells_key' specified.")
+		print("Either specify 'label_cells_key' or set 'label_individual_cells' to 'False'.")
+		stopifnot(FALSE)
+	}
 }
 
 main()
