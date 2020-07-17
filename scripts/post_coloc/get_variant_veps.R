@@ -16,7 +16,7 @@ ld_file = "data/ld/EUR_geno_hg38.txt.gz"
 ### Setup and loading config settings
 #####################################################
 
-#config_file = commandArgs(trailingOnly=TRUE)[1]
+config_file = commandArgs(trailingOnly=TRUE)[1]
 
 # Load pre-specified config file
 config = fromJSON(file=config_file)
@@ -48,7 +48,7 @@ all_loci = as.data.frame(list(chr=rep(0, max_total_snps), pos=rep(0, max_total_s
 
 loc_table_idx = 0
 # For each locus
-for (l in 1:max(colocs$locus))
+for (l in sort(unique(colocs$locus)))
 {
 	print(l)
 	# Get all lead SNPs for that locus (regardless of GWAS trait)
@@ -65,7 +65,7 @@ for (l in 1:max(colocs$locus))
 	for (snp in 1:dim(locus_snps)[1])
 	{	
 		snp_num = snp_num + 1
-		
+
 		# Add the lead SNP to the list
 		all_snps$chr[snp_num] = locus_snps$chr[snp]
 		all_snps$pos[snp_num] = locus_snps$pos[snp]

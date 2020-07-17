@@ -265,7 +265,7 @@ plot_heatmap = function(coloc_res, out_sub_folder)
 		#print(paste0("Plotting by ", split_col))
 
 		tmp_data=coloc_res %>% 
-			filter(coloc_res[["split_column"]] == splits[i])
+			filter(coloc_res[["split_column"]] == split_col)
 		
 		row_count = length(unique(tmp_data$y_factor))
 
