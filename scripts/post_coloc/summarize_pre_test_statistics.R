@@ -344,6 +344,8 @@ dim(results)
 
 results$locus = group_to_loci(results$ref_snp)
 
+clpp_cutoff = quantile(as.numeric(results$clpp_mod), as.numeric(config$target_clpp_mod_quantile)) 
+
 coloc_passing = results[as.numeric(results$clpp_mod) >= as.numeric(config$target_clpp_mod_cutoff),]
 coloc_passing = coloc_passing[as.numeric(coloc_passing$n_snps) >= as.numeric(config$target_num_snps),]
 
