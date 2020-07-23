@@ -1,3 +1,14 @@
+---
+title: "Assessing CLPP mod and CLPP scores in IR traits"
+output: 
+  html_document:
+author: "Mike Gloudemans"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+---
+
+```{r, echo=FALSE, results='hide'}
+require(tidyverse)
+
 suppressWarnings(suppressMessages(library(ggplot2)))
 suppressWarnings(suppressMessages(library(data.table)))
 suppressWarnings(suppressMessages(library(dplyr)))
@@ -5,19 +16,21 @@ suppressWarnings(suppressMessages(library(reshape2)))
 suppressWarnings(suppressMessages(library(tidyr)))
 suppressWarnings(suppressMessages(require(rjson)))
 
-coloc_file = "output/post_coloc/2020-05-11/refiltered/eqtls_and_sqtls/clpp_results_categorized_2020-05-11.txt"
+coloc_file = "../../../output/post_coloc/2020-05-11/refiltered/eqtls_and_sqtls/clpp_results_categorized_2020-05-11.txt"
 
 data = read.table(coloc_file, header=TRUE, sep="\t", fill=TRUE)
 eqtls = data[grepl("eQTLs", data$eqtl_file),]
 sqtls = data[grepl("sQTLs", data$eqtl_file),]
+```
 
-###################################################
 # Part 1: eCDFs of CLPP scores and CLPP mod
-###################################################
 
-# For both CLPP and CLPP-mod...
+## Modified CLPP score CDF
 
-# CLPP scores CDF
+We plot a CDF of the modified CLPP score across
+all tests performed in the IR analysis.
+
+```{r, echo=FALSE}
 plot(ecdf(data$clpp_mod), xlab="CLPP mod", ylab="quantile", main="CLPP mod eCDF", lwd=2)
 for(i in seq(0,1,0.05))
 {
@@ -29,21 +42,36 @@ for(i in seq(0,1,0.2))
 	abline(col="lightgray", v=i)
 	abline(col="lightgray", a=i, b=0)
 }
+```
 
-# CLPP scores per GWAS CDFs?
-plot(ecdf(data$clpp), xlab="CLPP", ylab="quantile", main="CLPP (normal) eCDF (truncated x-axis)", lwd=2, xlim=c(0,0.05))
+## Regular CLPP score CDF
+
+For the regular CLPP score, the relevant cutoffs are all near 0.01, 
+so we have to truncate the axis.
+
+```{r, echo=FALSE}
 plot(ecdf(data$clpp), xlab="CLPP", ylab="quantile", main="CLPP (normal) eCDF (super truncated x-axis)", lwd=2, xlim=c(0,0.01))
-plot(ecdf(data$clpp), xlab="CLPP", ylab="quantile", main="CLPP (normal) eCDF (super super truncated x-axis)", lwd=2, xlim=c(0,0.001))
+```
 
-# CLPP scores per GWAS CDFs?
+## Modified CLPP CDFs separated by individual GWAS and eQTL tissues
+
+### GWAS
+
+```{r, echo=FALSE}
 plot(ecdf(data$clpp_mod), xlab="CLPP mod", ylab="quantile", main="CLPP mod eCDF, split by GWAS", lwd=2)
 for (gwas in unique(data$gwas_short))
 {
 	sub = data[data$gwas_short == gwas,]
 	lines(ecdf(sub$clpp_mod), lwd=1, cex.points=0)
 }
+```
 
-# CLPP scores per eQTL CDFs?
+### eQTL
+
+We first plot all coloc tests together using a black line, and then
+we plot eQTLs only in blue, sQTLs only in blue (one for each tissue).
+
+```{r, echo=FALSE}
 plot(ecdf(data$clpp_mod), xlab="CLPP mod", ylab="quantile", main="CLPP mod eCDF, split by QTL tissue and type", lwd=2)
 lines(ecdf(sqtls$clpp_mod), lwd=2, col="red")
 lines(ecdf(eqtls$clpp_mod), lwd=2, col="blue")
@@ -57,17 +85,26 @@ for (eqtl in unique(eqtls$eqtl_short))
 	sub = eqtls[eqtls$eqtl_short == eqtl,]
 	lines(ecdf(sub$clpp_mod), lwd=1, cex.points=0, col="blue")
 }
+```
 
-###################################################
-# Part 2: eCDFs of loci and genes detected at
-# various cutoffs of CLPP scores and CLPP mod
-###################################################
+On average, we see a slightly higher modified CLPP score for eQTLs
+than for sQTLs.
 
+#  Part 2: Number of loci and genes detected at various cutoffs
+
+By selecting different CLPP thresholds for what counts as a colocalization,
+we'll naturally discover different numbers of genes and loci.
+
+(We show in black the total number of genes or loci colocalized at each cutoff
+The number from sQTLs alone is in red, and the number from eQTLs alone is in blue.)
+
+
+## How many genes discovered?
+
+### CLPP mod
+
+```{r, echo=FALSE}
 cutoffs = seq(0, 1, by=0.001)
-
-# Gene CDFs
-
-# CLPP mod
 
 genes_per_cutoff = sapply(cutoffs, function(x) {length(unique(data[data$clpp_mod >= x,]$ensembl))})
 sqtl_genes_per_cutoff = sapply(cutoffs, function(x) {length(unique(sqtls[sqtls$clpp_mod >= x,]$ensembl))})
@@ -94,9 +131,11 @@ for(i in seq(0, 4000 , 500))
 lines(cutoffs, genes_per_cutoff)
 lines(cutoffs, sqtl_genes_per_cutoff, col="red")
 lines(cutoffs, eqtl_genes_per_cutoff, col="blue")
+```
 
-# CLPP
+### CLPP
 
+```{r, echo=FALSE}
 genes_per_cutoff = sapply(cutoffs, function(x) {length(unique(data[data$clpp >= x,]$ensembl))})
 sqtl_genes_per_cutoff = sapply(cutoffs, function(x) {length(unique(sqtls[sqtls$clpp >= x,]$ensembl))})
 eqtl_genes_per_cutoff = sapply(cutoffs, function(x) {length(unique(eqtls[eqtls$clpp >= x,]$ensembl))})
@@ -122,10 +161,13 @@ for(i in seq(0, 2000 , 500))
 lines(cutoffs, genes_per_cutoff)
 lines(cutoffs, sqtl_genes_per_cutoff, col="red")
 lines(cutoffs, eqtl_genes_per_cutoff, col="blue")
+```
 
+## How many loci discovered?
 
-# Locus CDFs
+### Modified CLPP score
 
+```{r, echo=FALSE}
 loci_per_cutoff = sapply(cutoffs, function(x) {length(unique(data[data$clpp_mod >= x,]$locus))})
 sqtl_loci_per_cutoff = sapply(cutoffs, function(x) {length(unique(sqtls[sqtls$clpp_mod >= x,]$locus))})
 eqtl_loci_per_cutoff = sapply(cutoffs, function(x) {length(unique(eqtls[eqtls$clpp_mod >= x,]$locus))})
@@ -151,9 +193,11 @@ for(i in seq(0, 800, 100))
 lines(cutoffs, loci_per_cutoff)
 lines(cutoffs, sqtl_loci_per_cutoff, col="red")
 lines(cutoffs, eqtl_loci_per_cutoff, col="blue")
+```
 
-# CLPP
+### CLPP
 
+```{r, echo=FALSE}
 loci_per_cutoff = sapply(cutoffs, function(x) {length(unique(data[data$clpp >= x,]$locus))})
 sqtl_loci_per_cutoff = sapply(cutoffs, function(x) {length(unique(sqtls[sqtls$clpp >= x,]$locus))})
 eqtl_loci_per_cutoff = sapply(cutoffs, function(x) {length(unique(eqtls[eqtls$clpp >= x,]$locus))})
@@ -179,57 +223,108 @@ for(i in seq(0, 800 , 100))
 lines(cutoffs, loci_per_cutoff)
 lines(cutoffs, sqtl_loci_per_cutoff, col="red")
 lines(cutoffs, eqtl_loci_per_cutoff, col="blue")
+```
 
-########################################################
 # Part 3: Direct comparison of CLPP and CLPP mod
-########################################################
 
-# CLPP mod vs. CLPP scatterplot
+How do the modified and regular CLPP scores compare with one another?
+Is there actually a solid justification for using the modified CLPP score
+at all?
+
+## Direct comparison
+
+The modified CLPP scores and standard CLPP scores differ quite a bit.
+
+```{r}
 plot(data$clpp_mod, data$clpp, pch=18)
 cor.test(data$clpp_mod, data$clpp)
+```
+
+But there's less of a discrepancy if we just look at relative ranks and
+ignore the scale of the distribution.
+
+```{r}
 plot(rank(data$clpp_mod), rank(data$clpp), pch=18)
 cor.test(rank(data$clpp_mod), rank(data$clpp))
+```
 
-# CLPP mod and CLPP vs. number SNPs tested at locus
-# The plots are a mess though
-#plot(rank(data$clpp), rank(data$n_snps), pch=18)
-cor.test(rank(data$clpp), rank(data$n_snps))
-#plot(rank(data$clpp_mod), rank(data$n_snps), pch=18)
-cor.test(rank(data$clpp_mod), rank(data$n_snps))
+## CLPP scores vs. GWAS / eQTL p-values
 
-# vs. GWAS pval
+How do the two scores tend to prioritize loci with
+different levels of GWAS / eQTL significance?
+
+### GWAS p-value
+
+```{r}
 plot(rank(data$clpp), rank(data$min_gwas_pval), pch=18)
 cor.test(rank(data$clpp), rank(data$min_gwas_pval))
 plot(rank(data$clpp_mod), rank(data$min_gwas_pval), pch=18)
 cor.test(rank(data$clpp_mod), rank(data$min_gwas_pval))
+```
 
-# vs. eQTL pval
+# eQTL p-value
+
+```{r}
 plot(rank(data$clpp), rank(data$min_eqtl_pval), pch=18)
 cor.test(rank(data$clpp), rank(data$min_eqtl_pval))
 plot(rank(data$clpp_mod), rank(data$min_eqtl_pval), pch=18)
 cor.test(rank(data$clpp_mod), rank(data$min_eqtl_pval))
+```
 
+```{r, evaluate=FALSE}
 # vs max (GWAS, eQTL pval)
 plot(rank(data$clpp), rank(pmin(data$min_eqtl_pval, data$min_gwas_pval)), pch=18)
 cor.test(rank(data$clpp), rank(pmin(data$min_eqtl_pval, data$min_gwas_pval)))
 plot(rank(data$clpp_mod), rank(pmin(data$min_eqtl_pval, data$min_gwas_pval)), pch=18)
 cor.test(rank(data$clpp_mod), rank(pmin(data$min_eqtl_pval, data$min_gwas_pval)))
+```
 
-########################################################
-# Part 4: Direct comparison of CLPP and CLPP mod
-# specifically for LD patterns
-########################################################
+As might be expected, stronger eQTL / GWAS hits tend to be slightly more likely to
+colocalize, but there isn't really a difference between the two scores.
 
-# NOTE: This might not be 100% reliable when the lead variant isn't actually
-# in the LD lookup table to begin with -- will work for some at least though
-#
-# Also it matters more how many of these variants were actually tested, not
-# the absolute total number of them
-#
+## CLPP scores vs. number SNPs tested
+
+For loci with a large number of SNPs tested, we expect that the CLPP score
+may be deflated because the GWAS and eQTL signals are divided among all the
+top SNPs instead of considered as one linked signal.
+
+Do we see this happening?
+
+### Regular CLPP score
+```{r}
+plot(rank(data$clpp), rank(data$n_snps), pch=18)
+cor.test(rank(data$clpp), rank(data$n_snps))
+```
+
+### Modified CLPP score
+```{r}
+plot(rank(data$clpp_mod), rank(data$n_snps), pch=18)
+cor.test(rank(data$clpp_mod), rank(data$n_snps))
+```
+
+We don't see much relationship with the number of SNPs, but really we
+can do better. We care less about how many unlinked or distant SNPs there 
+are at the locus, than the total number of SNPs in LD with the lead SNP.
+
+# Part 4: Comparison of CLPP and CLPP mod in different LD patterns
+
+NOTE: This might not be 100% reliable when the lead variant isn't actually
+in the LD lookup table I used. It will work for some at least though
+
+Also, it technically matters more how many of these variants were actually tested, not
+the absolute total number of them.
+
+There should still be plenty of signal to see though if it does exist.
+
+
 
 # CLPP mod and CLPP vs. number LD buddies
-ld_file = "data/ld/EUR_geno_hg38.txt.gz"
 
+Not shown: For each lead GWAS SNP, I count the number of LD buddies (SNPs
+with R2 > 0.8 in 1000 Genomes Phase 1 data).
+
+```{r , results='hide'}
+ld_file = "../../../data/ld/EUR_geno_hg38.txt.gz"
 data$ld_buddy_count = -1
 
 count_ld_buddies = function(chr, snp_pos)
@@ -249,17 +344,41 @@ for (i in 1:dim(all_snps)[1])
 
 	data$ld_buddy_count[(data$chr = chr) & (data$pos == pos)] = count
 }
+```
 
+The question here is, does the CLPP mod score tend to be less sensitive than the regular CLPP
+score to the number of LD buddies at a locus?
+
+```{r}{hide}
 plot(data$ld_buddy_count, data$clpp, pch=18)
 cor.test(data$ld_buddy_count, data$clpp)
+```
+
+## Regular CLPP score
+```{r}
 plot(rank(data$ld_buddy_count), rank(data$clpp), pch=18)
 cor.test(rank(data$ld_buddy_count), rank(data$clpp))
+```
 
+```{r, results='hide'}
 plot(data$ld_buddy_count, data$clpp_mod, pch=18)
 cor.test(data$ld_buddy_count, data$clpp_mod)
+```
+
+## Modified CLPP score
+```{r}
 plot(rank(data$ld_buddy_count), rank(data$clpp_mod), pch=18)
 cor.test(rank(data$ld_buddy_count), rank(data$clpp_mod))
+```
 
+Suprisingly, there really isn't any relationship between the 
+number of LD buddies and the modified CLPP score.
+
+Not shown: I checked to make sure the results aren't much different
+if we throw away SNPs with no LD buddies, which may mean they simply weren't
+in the lookup table. There wasn't much of a difference.
+
+```{r, results='hide'}
 if (FALSE)
 {
 	# Worth checking, but doesn't really make a big difference
@@ -276,40 +395,92 @@ if (FALSE)
 	plot(rank(sub$ld_buddy_count), rank(sub$clpp), pch=18)
 	cor.test(rank(sub$ld_buddy_count), rank(sub$clpp))
 }
+```
 
-# Let's maybe just get one score per locus, for simplicity
+In the above analysis, we're including a lot of negative tests
+and double-counting a lot of the loci. To make things simpler, let's
+distill each lead SNP into one number: the highest score achieved at
+that locus. (Hypothesis is that loci with more LD buddies will less
+often achieve a high CLPP score, but there won't be as much difference with the 
+modified CLPP score.)
+
+Then we take a quick look at how many LD buddies there are at the typical loci.
+
+```{r}
 locus_groups = data %>% group_by(chr, pos) %>% summarize(ld_buddy_count = median(ld_buddy_count), best_clpp = max(clpp), best_clpp_mod = max(clpp_mod))
-
 hist(locus_groups$ld_buddy_count, breaks=seq(0,max(locus_groups$ld_buddy_count)+1, 1)-0.1, xlim=c(0, 100))
+```
 
+There is a long but thin tail stretching out well into the hundreds, 
+not shown in the plot above.
+
+## Trying again: regular CLPP score
+
+```{r}
 plot(rank(locus_groups$ld_buddy_count), rank(locus_groups$best_clpp), pch=18)
 cor.test(rank(locus_groups$ld_buddy_count), rank(locus_groups$best_clpp))
-# It kind of seems like even if there's not a great correlation overall, the ones with some colocalization tend to be sensitive to these numbers
-# So it might actually have an effect depending on where the threshold is set...
+```
+
+There is still hardly any correlation, and the plot is simply a mess. 
+
+Strangely though, for the subset loci that actually DO have some evidence colocalization (the top
+half of the above plot), there _does_ seem to be a negative correlation between
+number of LD buddies and the standard CLPP score:
+
+```{r}
 some_locus_groups = locus_groups[locus_groups$best_clpp > 0.01,]
 plot(rank(some_locus_groups$ld_buddy_count), rank(some_locus_groups$best_clpp), pch=18)
 cor.test(rank(some_locus_groups$ld_buddy_count), rank(some_locus_groups$best_clpp))
+```
 
+## Trying again: modified CLPP score
+
+```{r}
 plot(rank(locus_groups$ld_buddy_count), rank(locus_groups$best_clpp_mod), pch=18)
 cor.test(rank(locus_groups$ld_buddy_count), rank(locus_groups$best_clpp_mod))
-# It kind of seems like even if there's not a great correlation overall, the ones with some colocalization tend to be sensitive to these numbers
-# So it might actually have an effect depending on where the threshold is set...
+```
+
+Similarly, for the modified CLPP score, we don't see much of a relationship at first
+with number LD buddies.
+
+But we do see a relationship if we look at those achieving a higher modified CLPP score (> 0.3)
+to begin with.
+
+```{r}
 some_locus_groups = locus_groups[locus_groups$best_clpp_mod > 0.3,]
 plot(rank(some_locus_groups$ld_buddy_count), rank(some_locus_groups$best_clpp_mod), pch=18)
 cor.test(rank(some_locus_groups$ld_buddy_count), rank(some_locus_groups$best_clpp_mod))
+```
+
+Conclusions:
+* LD buddies may affect the standard and modified CLPP scores, but the effects are only 
+  visible if we look at the subset of tests that achieved a relatively high score in the first place.
+* There is not much compelling evidence in favor of using the modified CLPP score; at the same
+  time, there aren't any warning signs that make the modified CLPP score seem especially dubious.
+* (Side note) : Analyses to date on simulated data for the coloc comparisons project have shown that
+  the two scores achieve practically equal performance on these test sets.
 
 
-########################################################
 # Part 5: Messing around with FDRs
-########################################################
 
-# We can add this to the CDFs actually, it's just cumsum(1-prob I think)
-# And can additionally then make a plot showing it as percents...
+NOTE: this last part is still in the works
 
+Although the calibration of the standard and modified CLPP scores may be dubious, they
+do represent actual probabilities, so it is technically possible to calculate
+expected number of false discoveries and the FPR at each possible cutoff.
+
+At a given cutoff, we compute the expected number of false positive colocalizations by taking the 
+cumulative sum of (1-CLPP) for all colocalization tests with CLPP greater than this cutoff.
+
+Comparing this with the total number of tests with CLPP greater than the cutoff gives us the
+expected FPR at that cutoff.
+
+One caveat to this analysis: it's hard to estimate the exact number of GENES or LOCI
+that will be falsely discovered. We can really only estimate the exact number 
+of COLOC TESTS that will be false.
+
+```{r}
 cutoffs = seq(0, 1, by=0.001)
-
-# NOTE: Hard to estimate the exact number of GENES that will be falsely discovered,
-# we can really only estimate the exact number of coloc events that will be false.
 
 # With CLPP mod
 # How about the number of coloc events total though?
@@ -331,4 +502,6 @@ genes_per_cutoff = sapply(cutoffs, function(x) {length(unique(data[data$clpp >= 
 plot(cutoffs, genes_per_cutoff, type="l", xlab="CLPP cutoff", ylab="# unique colocalized genes", main="Varying CLPP thresholds", xlim=c(0,0.2), ylim=c(0,1500))
 lines(cutoffs, expected_fpr * 1500, lty="dashed")
 
+```
 
+(I am going to add this to the CDFs above, but haven't completed this last step yet.)

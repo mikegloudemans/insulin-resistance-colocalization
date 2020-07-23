@@ -147,7 +147,7 @@ all_snp_gene_pairs$ensembl = all_snp_gene_pairs$feature
 all_snp_gene_pairs$ensembl = gsub(":", ".", all_snp_gene_pairs$ensembl)
 
 # Map splice events to the corresponding gene
-splice_map = read.table("data/sqtls/gtex_v8/splice_to_gene_map.txt.gz", header=TRUE)
+splice_map = read.table("data/sqtls/splice_to_gene_map.txt.gz", header=TRUE)
 splice_map$splice_junction = gsub(":", ".", splice_map$splice_junction)
 splice_indices = grepl("clu", all_snp_gene_pairs$feature)
 all_snp_gene_pairs$ensembl[splice_indices] = as.character(splice_map$gene[match(all_snp_gene_pairs$ensembl[splice_indices], splice_map$splice_junction)])
@@ -344,10 +344,19 @@ dim(results)
 
 results$locus = group_to_loci(results$ref_snp)
 
-clpp_cutoff = quantile(as.numeric(results$clpp_mod), as.numeric(config$target_clpp_mod_quantile)) 
-
-coloc_passing = results[as.numeric(results$clpp_mod) >= as.numeric(config$target_clpp_mod_cutoff),]
 coloc_passing = coloc_passing[as.numeric(coloc_passing$n_snps) >= as.numeric(config$target_num_snps),]
+
+# Get and save the top X% quantile that we've chosen to use
+if ("target_clpp_mod_quantile" %in% names(config))
+{
+	clpp_cutoff = quantile(as.numeric(results$clpp_mod), as.numeric(config$target_clpp_mod_quantile)) 
+}
+else
+{
+	clpp_cutoff = as.numeric(config$target_clpp_mod_score)
+}
+
+coloc_passing = results[as.numeric(results$clpp_mod) >= clpp_cutoff,]
 
 #########################################################
 ## We need to filter all lists to make sure they've

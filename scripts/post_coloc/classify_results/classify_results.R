@@ -1,4 +1,5 @@
 # Author: Mike Gloudemans
+
 #
 # Implement Ivan's method for sorting out the test results
 # into various categories
@@ -30,8 +31,6 @@ full_config = fromJSON(file = config_file)
 # be specified in the config for the entire pipeline run
 class_config = fromJSON(file = full_config$classification_config_file)
 
-full_config$out_dir
-
 # Load colocalization results matrix (output from the other
 # QC and preparation script)
 data = read.table(paste0(full_config$out_dir, "/clpp_results_", full_config$analysis_date, ".txt"), header=TRUE, sep="\t")
@@ -43,8 +42,23 @@ cutoff_gwas_pval = as.numeric(class_config$pre_filters$max_gwas_pval)
 cutoff_eqtl_pval = as.numeric(class_config$pre_filters$max_eqtl_pval)
 cutoff_snp_count = as.numeric(class_config$pre_filters$min_snp_count)
 
-strong_clpp_threshold = as.numeric(class_config$pre_filters$strong_clpp_threshold)
-weak_clpp_threshold = as.numeric(class_config$pre_filters$weak_clpp_threshold)
+if ("strong_clpp_quantile_threshold" %in% names(class_config$pre_filters))
+{
+	strong_clpp_threshold = quantile(as.numeric(data$clpp_mod), as.numeric(class_config$pre_filters$strong_clpp_quantile_threshold)) 
+} else
+{
+	strong_clpp_threshold = as.numeric(class_config$pre_filters$strong_clpp_threshold)
+}
+
+if ("weak_clpp_quantile_threshold" %in% names(class_config$pre_filters))
+{
+	weak_clpp_threshold = quantile(as.numeric(data$clpp_mod), as.numeric(class_config$pre_filters$weak_clpp_quantile_threshold)) 
+
+} else
+{
+	weak_clpp_threshold = as.numeric(class_config$pre_filters$weak_clpp_threshold)
+}
+
 
 ###################################
 # Part 0: Pre-filtering
@@ -220,7 +234,10 @@ weak_classes = sapply(weak_loci, function(x)
 		# so doesn't belong in the "None" category
 		return("Other")
        })
-step2_list[which(loci_list %in% weak_loci)] = weak_classes
+if (length(weak_classes) != 0)
+{
+	step2_list[which(loci_list %in% weak_loci)] = weak_classes
+}
 
 # Finally, the rest should have no colocs at all
 # Make sure these loci actually have no colocs, then tag them
