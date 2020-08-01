@@ -94,6 +94,8 @@ sub = data[gwas_passing & eqtl_passing,]
 # Remove those not having enough SNPs to pass filters
 sub = sub[sub$n_snps >= cutoff_snp_count,]
 
+sub$ref_snp = paste(sub$chr, sub$pos, sep="_")
+
 loci_list = sort(unique(sub$locus))
 step1_list = rep("", length(loci_list))
 step2_list = rep("", length(loci_list))
@@ -314,7 +316,11 @@ coloc_genes = sub %>% group_by(locus) %>% summarize(candidate_genes = paste(uniq
 				      strong_coloc_eqtl_genes = paste(unique(ensembl[(clpp_mod >= strong_clpp_threshold)& grepl("eQTL", eqtl_file)]), collapse=";"), 
 				      strong_coloc_sqtl_genes = paste(unique(ensembl[(clpp_mod >= strong_clpp_threshold)& grepl("sQTL", eqtl_file)]), collapse=";"), 
 				      strong_coloc_sqtl_features = paste(unique(feature[(clpp_mod >= strong_clpp_threshold) & grepl("sQTL", eqtl_file)]), collapse=";"),
-				      strong_coloc_both = paste(unique(ensembl[(clpp_mod >= strong_clpp_threshold)& grepl("eQTL", eqtl_file)])[unique(ensembl[(clpp_mod >= strong_clpp_threshold)& grepl("eQTL", eqtl_file)]) %in% unique(ensembl[(clpp_mod >= strong_clpp_threshold)& grepl("sQTL", eqtl_file)])], collapse=";"))
+				      strong_coloc_both = paste(unique(ensembl[(clpp_mod >= strong_clpp_threshold)& grepl("eQTL", eqtl_file)])[unique(ensembl[(clpp_mod >= strong_clpp_threshold)& grepl("eQTL", eqtl_file)]) %in% unique(ensembl[(clpp_mod >= strong_clpp_threshold)& grepl("sQTL", eqtl_file)])], collapse=";"),
+				      strong_coloc_traits = paste(unique(gwas_short[(clpp_mod >= strong_clpp_threshold)]), collapse=","),
+				      all_lead_gwas_snps=paste(unique(rsid[(clpp_mod >= strong_clpp_threshold)]),collapse=","),
+				      all_lead_gwas_coords=paste(unique(ref_snp[(clpp_mod >= strong_clpp_threshold)]),collapse=",")
+				      )
 
 
 ####### Put all the results together ########
