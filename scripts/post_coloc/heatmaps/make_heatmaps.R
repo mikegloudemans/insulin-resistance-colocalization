@@ -133,7 +133,9 @@ main = function()
 			dst = suppressWarnings(dist(dc, method = "binary"))
 			dst[is.na(dst)] = 1
 			h = hclust(dst)
-			
+
+			#ixs = sort(h$order, index.return=TRUE)$ix
+
 			coloc_res_tmp$y_factor = factor(coloc_res_tmp$y_factor, levels = rownames(grid)[h$order])
 		}
 
@@ -151,7 +153,8 @@ plot_coloc_results_function=function(data){
               mapping = aes(x=x_factor, y = y_factor)) + 
     geom_tile(mapping = aes(fill=coloc_class),color="black") + 
     scale_fill_manual(name="CLPP", values = color_scheme ,drop=FALSE) + 
-    geom_text(mapping = aes(label=cross), size=7) +
+    geom_text(mapping = aes(label=cross, color=cross_col), size=4) +
+    scale_colour_manual(values=c("black", "white")) +
     theme(axis.title = element_blank(), 
           axis.text.x = element_text(angle=90, size=15, hjust = 1, vjust=.5), 
           axis.text.y = element_text(size=12), 
@@ -195,8 +198,10 @@ get_coloc_results = function(coloc_file)
 		# IF annotating with crosses and other marks to denote which ones 
 		# aren't trustworthy, do it here.
 		coloc_res = label_individual_cells(coloc_res)
-	}
-	else
+	} else if (("put_scores_in_cells" %in% names(config)) && (config$put_scores_in_cells) == "True")
+	{
+		coloc_res = put_scores_in_cells(coloc_res)
+	} else
 	{
 		coloc_res$cross = ""
 		coloc_res$cross_col = ""
@@ -207,6 +212,19 @@ get_coloc_results = function(coloc_file)
 
 	return(coloc_res)
 }
+
+put_scores_in_cells = function(coloc_res)
+{
+	# Annotate results by significance of GWAS and eQTL hits
+
+	coloc_res_tmp = coloc_res
+	coloc_res_tmp$cross = as.character(round(coloc_res_tmp$clpp_mod, 2) * 100)
+	coloc_res_tmp$cross_col = "black"
+	# NOTE: in the long term we don't want this to be hard-coded
+	coloc_res_tmp$cross_col[coloc_res_tmp$clpp_mod > 0.35] = "white"
+
+	return(coloc_res_tmp)
+} 
 
 label_individual_cells = function(coloc_res)
 {
@@ -274,6 +292,7 @@ plot_heatmap = function(coloc_res, out_sub_folder)
 		for (chunk in 1:max_chunk)
 		{
 			tmp_chunk = tmp_data[tmp_data$y_factor %in% unique(tmp_data$y_factor)[(1+(chunk-1)*chunk_size):min(chunk_size*chunk, row_count)],]
+			tmp_chunk$y_factor = factor(tmp_chunk$y_factor, levels = rev(unique(tmp_chunk$y_factor)))
 
 			# Genes per locus
 			genes_per_locus = tmp_chunk %>% group_by(locus) %>% summarize(genes_at_locus=length(unique(y_factor))) %>% arrange(locus)
@@ -330,6 +349,9 @@ plot_heatmap = function(coloc_res, out_sub_folder)
 
 get_heatmap_classes = function(coloc_res)
 {
+	strong_threshold = 0.35
+	weak_threshold = 0.35
+
 	# TODO: I need to generalize this to other things beyond eqtl and sqtl
 	# Label each locus with a QTL type, to be used for determining colors later
 	classes = sapply(1:dim(coloc_res)[1],
@@ -339,33 +361,33 @@ get_heatmap_classes = function(coloc_res)
 		      matches = coloc_res[(coloc_res$x_factor == tmp$x_factor) & (coloc_res$y_factor == tmp$y_factor),]
 
 		      # There are quite a few cases to test for
-		      if ((sum((matches$qtl_type == "eqtl") & (matches$clpp_mod >= 0.4)) > 0) &&
-			      (sum((matches$qtl_type == "sqtl") & (matches$clpp_mod >= 0.4)) > 0))
+		      if ((sum((matches$qtl_type == "eqtl") & (matches$clpp_mod >= strong_threshold)) > 0) &&
+			      (sum((matches$qtl_type == "sqtl") & (matches$clpp_mod >= strong_threshold)) > 0))
 		      {
 			      return("strong-both")
 		      }
-		      if ((sum((matches$qtl_type == "eqtl") & (matches$clpp_mod >= 0.4)) > 0) &&
-			      (sum((matches$qtl_type == "sqtl") & (matches$clpp_mod >= 0.4)) == 0))
+		      if ((sum((matches$qtl_type == "eqtl") & (matches$clpp_mod >= strong_threshold)) > 0) &&
+			      (sum((matches$qtl_type == "sqtl") & (matches$clpp_mod >= strong_threshold)) == 0))
 		      {
 			      return("strong-eqtl")
 		      }
-		      if ((sum((matches$qtl_type == "eqtl") & (matches$clpp_mod >= 0.4)) == 0) &&
-			      (sum((matches$qtl_type == "sqtl") & (matches$clpp_mod >= 0.4)) > 0))
+		      if ((sum((matches$qtl_type == "eqtl") & (matches$clpp_mod >= strong_threshold)) == 0) &&
+			      (sum((matches$qtl_type == "sqtl") & (matches$clpp_mod >= strong_threshold)) > 0))
 		      {
 			      return("strong-sqtl")
 		      }
-		      if ((sum((matches$qtl_type == "eqtl") & (matches$clpp_mod >= 0.25)) > 0) &&
-			      (sum((matches$qtl_type == "sqtl") & (matches$clpp_mod >= 0.25)) > 0))
+		      if ((sum((matches$qtl_type == "eqtl") & (matches$clpp_mod >= weak_threshold)) > 0) &&
+			      (sum((matches$qtl_type == "sqtl") & (matches$clpp_mod >= weak_threshold)) > 0))
 		      {
 			      return("weak-both")
 		      }
-		      if ((sum((matches$qtl_type == "eqtl") & (matches$clpp_mod >= 0.25)) == 0) &&
-			      (sum((matches$qtl_type == "sqtl") & (matches$clpp_mod >= 0.25)) > 0))
+		      if ((sum((matches$qtl_type == "eqtl") & (matches$clpp_mod >= weak_threshold)) == 0) &&
+			      (sum((matches$qtl_type == "sqtl") & (matches$clpp_mod >= weak_threshold)) > 0))
 		      {
 			      return("weak-sqtl")
 		      }
-		      if ((sum((matches$qtl_type == "eqtl") & (matches$clpp_mod >= 0.25)) > 0) &&
-			      (sum((matches$qtl_type == "sqtl") & (matches$clpp_mod >= 0.25)) == 0))
+		      if ((sum((matches$qtl_type == "eqtl") & (matches$clpp_mod >= weak_threshold)) > 0) &&
+			      (sum((matches$qtl_type == "sqtl") & (matches$clpp_mod >= weak_threshold)) == 0))
 		      {
 			      return("weak-eqtl")
 		      }
@@ -399,7 +421,7 @@ collapse_axis_factors = function(coloc_file)
 	}
 
 	coloc_res = coloc_res %>% arrange(as.numeric(coloc_res$locus))
-	coloc_res$y_factor = factor(coloc_res$y_factor, levels = rev(unique(coloc_res$y_factor)))
+	coloc_res$y_factor = factor(coloc_res$y_factor, levels = unique(coloc_res$y_factor))
 	
 	# Collapse across tissues
 	# Remove all but the best tissue for a given
