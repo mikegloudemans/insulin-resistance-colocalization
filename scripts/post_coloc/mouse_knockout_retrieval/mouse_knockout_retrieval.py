@@ -106,7 +106,7 @@ def write_output_file(gene_set, mp_phenos, gene_phenos, human_to_mouse, out_file
                 if len(gene_phenos[gene]) == 0:
                     pheno_formatted = "no_knockout_mice"
                 else:
-                    pheno_formatted = ",".join([pheno + ":" + mp_phenos[pheno].strip().replace(" ", "_") for pheno in gene_phenos[gene] if pheno in mp_phenos])
+                    pheno_formatted = ",".join([pheno + ":" + mp_phenos[pheno].strip().replace(" ", "_").replace(",", "") for pheno in gene_phenos[gene] if pheno in mp_phenos])
                 if pheno_formatted == "":
                     pheno_formatted = "no_relevant_phenotypes_found"
             else:
