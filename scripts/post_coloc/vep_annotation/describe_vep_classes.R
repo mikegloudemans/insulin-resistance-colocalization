@@ -1,6 +1,3 @@
-% with each annotation
-% with / without a "serious" annotation
-
 require(dplyr)
 require(ggplot2)
 
