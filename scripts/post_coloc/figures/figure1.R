@@ -45,6 +45,10 @@ main = function() {
 
 	coloc_passing =  coloc_res %>% filter(clpp_mod > clpp_mod_threshold)
 	strong_coloc_counts = coloc_passing %>% group_by(tissue) %>% summarize(gene_count=length(unique(ensembl)))
+	sqtl_coloc_passing =  coloc_passing %>% filter(grepl("sQTL", eqtl_short))
+	sqtl_strong_coloc_counts = sqtl_coloc_passing %>% group_by(tissue) %>% summarize(gene_count=length(unique(ensembl)))
+	eqtl_coloc_passing =  coloc_passing %>% filter(grepl("eQTL", eqtl_short))
+	eqtl_strong_coloc_counts = eqtl_coloc_passing %>% group_by(tissue) %>% summarize(gene_count=length(unique(ensembl)))
 
 	gwas_hits = read.table(gwas_snps_file, header=TRUE, sep="\t", stringsAsFactors=FALSE)
 
@@ -125,46 +129,45 @@ main = function() {
 	# https://datascienceplus.com/how-to-build-a-simple-flowchart-with-r-diagrammer-package/
 
 	####################################################################################
-	# Panel: % of all loci falling out at various levels
-	# maybe 3 levels deep? All loci, all GWAS loci, all overlap loci, all overlapping?
+	# Panel: comparison of GTEx tissue sample size and # colocs found in that tissue
 	####################################################################################
 
-	genomic_loci_count = dim(all_genome_loci)[1]
-	gwas_hit_locus_count = length(unique(gwas_hits$locus))
-	gwas_and_qtl_locus_count = length(unique(coloc_res$locus))
+	sample_sizes = c(  581, # Adipose_Subcutaneous 
+			   469, # Adipose_Visceral_Omentum
+			   208, # Liver
+			   706, # Muscle_Skeletal
+			   305) # Pancreas
 
-	# Then we need to get the number that are both sQTL and eQTL, and all that
-	# And we need to figure out how many are same gene vs. different
+	egenes = c(        15607, # Adipose_Subcutaneous 
+			   12482, # Adipose_Visceral_Omentum
+			   5734, # Liver
+			   13532, # Muscle_Skeletal
+			   9660) # Pancreas
+	
+	sgenes = c(        5113, # Adipose_Subcutaneous 
+			   4210, # Adipose_Visceral_Omentum
+			   1485, # Liver
+			   4056, # Muscle_Skeletal
+			   2250) # Pancreas
 
-	# Load in the data
-	classes = read.table("output/post_coloc/2020-05-11/refiltered/eqtls_and_sqtls/coloc_classification_2020-05-11.txt", sep="\t", header=TRUE, fill=TRUE)
 
-	types = classes %>% group_by(locus) %>% summarize(both = (nchar(as.character(strong_coloc_eqtl_genes)) > 0) && (nchar(as.character(strong_coloc_sqtl_genes)) > 0), eqtl_only = (nchar(as.character(strong_coloc_eqtl_genes)) > 0) && (nchar(as.character(strong_coloc_sqtl_genes)) == 0), sqtl_only=(nchar(as.character(strong_coloc_eqtl_genes)) == 0) && (nchar(as.character(strong_coloc_sqtl_genes)) > 0), none = (nchar(as.character(strong_coloc_eqtl_genes)) == 0) && (nchar(as.character(strong_coloc_sqtl_genes)) == 0), same_coloc = sum(nchar(as.character(strong_coloc_both)) > 0))
-	type_counts = colSums(types[,2:5])
-	same_coloc_counts = sum(types[,6])
+	# (these numbers were generated above in the section for the panel g_a that is no longer used)
+	tissue_qtls = data.frame(list(tissue=strong_coloc_counts$tissue, eqtl=eqtl_strong_coloc_counts$gene_count, sqtl=sqtl_strong_coloc_counts$gene_count, either=strong_coloc_counts$gene_count, samples_sizes = sample_sizes , egenes=egenes, sgenes=sgenes))
 
-	bar1_all_loci = data.frame(list(x = rep(1, 2),
-			       y = rev(c(gwas_hit_locus_count, genomic_loci_count - gwas_hit_locus_count)),
-			       inner_labels = c("fill 1", "fill 2")))
-	bar2_all_loci = data.frame(list(x = rep(2, 2),
-			       y = rev(c(gwas_and_qtl_locus_count, gwas_hit_locus_count - gwas_and_qtl_locus_count)),
-			       inner_labels = c("fill 1", "fill 2")))
-	bar3_all_loci = data.frame(list(x = rep(3, 4),
-			       y = rev(type_counts),
-			       inner_labels = c("fill 1", "fill 1", "fill 1", "fill 2")))
-	bar4_all_loci = data.frame(list(x = rep(4, 2),
-			       y = rev(c(same_coloc_counts, type_counts[1] - same_coloc_counts)),
-			       inner_labels = c("fill 1", "fill 2")))
+	tissue_eqtls = data.frame(list(x=tissue_qtls$egenes, y=tissue_qtls$eqtl, type="eqtl", tissue=tissue_qtls$tissue))
+	tissue_sqtls = data.frame(list(x=tissue_qtls$sgenes, y=tissue_qtls$sqtl, type="sqtl", tissue=tissue_qtls$tissue))
 
-	all_bars = rbind(bar1_all_loci, bar2_all_loci, bar3_all_loci, bar4_all_loci)
+	all = rbind(tissue_eqtls, tissue_sqtls)
 
-	g_b = ggplot() +
-		geom_bar(data = all_bars, aes(fill=inner_labels, y=y, x=-x), stat = "identity", color="black") +
+	g_b = ggplot(all, aes(x=x, y=y, color=tissue, shape=type)) +
+		geom_point(size=3) +
 		theme_minimal() +
-		theme(axis.title.y = element_blank(), legend.position = "none", axis.text.y = element_blank()) +
-		coord_flip() +
-		scale_fill_manual(values=c("white", "gray")) +
-		ylab("Number of loci") 
+		scale_color_manual(values=tissue_colors)+
+		xlim(c(0,max(all$x)))+
+		ylim(c(0,max(all$y)))+
+		xlab("# eGenes / sGenes")+
+		ylab("# eQTL / sQTL tests colocalized")
+	g_b
 
 	###############################################
 	# Panel: colocs per GWAS (prob add some #s)
@@ -178,7 +181,7 @@ main = function() {
 
 	coloc_res$gwas_trait=factor(x = coloc_res$gwas_trait, 
 		   levels = c("MI_adjBMI_European.txt.gz", "MAGIC_ISI_Model_2_AgeSexBMI.txt.txt.gz", "FastInsu_adjBMI_MAGIC_Europeans.txt.gz", "FastGlu_MAGIC_Europeans.txt.gz", "T2D_Mahajan_Europeans.txt.gz", "Type-2-Diabetes_Suzuki_2019.txt.gz", "Type-2-Diabetes_Xue_2018.txt.gz", "Type-2-Diabetes_Spracklen_2020.txt.gz", "WHR-adj-BMI_GIANT_2018.txt.gz", "HDL_GLGC_Expanded.txt.gz", "TG_GLGC_Expanded.txt.gz", "BMI_GIANT_2018.txt.gz"),
-		   labels = c("ISI_Genesis", "ISI_MAGIC", "FastInsu", "FastGlu", "T2D-Mahajan","T2D-Suzuki", "T2D-Xue", "T2D-Spracklen","WHR","HDL","TG","BMI"))
+		   labels = c("IR", "IR", "FastInsu", "FastGlu", "T2D","T2D", "T2D", "T2D","WHR","HDL","TG","BMI"))
 
 	coloc_props = coloc_res %>% group_by(gwas_trait, locus) %>% 
 		summarize(eqtl_only = (sum(nchar(strong_coloc_eqtl_genes) > 0) > 0) && (sum(nchar(strong_coloc_sqtl_genes) > 0) == 0),
@@ -264,11 +267,23 @@ main = function() {
 		theme(axis.title.y = element_blank(), legend.title=element_blank())
 
 
+	# TODO: something with loc_sums
+	loc_sums$genes = pmin(loc_sums$genes, 20)
+	loc_sums$strong_colocs = pmin(loc_sums$strong_colocs, 20)
+
+	
+
+	g_d = ggplot(data=loc_sums, aes(x=genes+rnorm(length(genes),0,0.1), y=strong_colocs+rnorm(length(genes),0,0.1))) +
+		theme_minimal() +
+		geom_point(color="red",stroke=0,size=2,alpha=0.2)+
+		xlab("Number of candidate genes")+
+		ylab("Number of colocalized genes")
+
 	########################################################
 	# Now put them all together
 	########################################################
 
-	first_row = plot_grid(g_a, labels = c('A'), nrow=1)
+	first_row = plot_grid(NULL, labels = c('A'), nrow=1)
 	second_row = plot_grid(g_b, g_c, g_d, labels = c('B', 'C', 'D'), ncol=3)
 
 	gg_all = plot_grid(first_row, second_row, labels=c('', ''), rel_heights = c(3,2), nrow=2)

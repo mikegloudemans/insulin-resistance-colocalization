@@ -33,7 +33,6 @@ write_summary = function(x, append=TRUE)
 	summary_file = paste0(config$out_dir, "/", "filtering_summary_counts.txt")
 	write(x, file=summary_file, append=append)
 }
-write_summary("Summary of filters:\n--------------------\n", append=FALSE)
 
 # We select the traits we are interested in. We originally load
 # all traits but then subset down to these.
@@ -344,19 +343,18 @@ dim(results)
 
 results$locus = group_to_loci(results$ref_snp)
 
-coloc_passing = coloc_passing[as.numeric(coloc_passing$n_snps) >= as.numeric(config$target_num_snps),]
 
 # Get and save the top X% quantile that we've chosen to use
 if ("target_clpp_mod_quantile" %in% names(config))
 {
 	clpp_cutoff = quantile(as.numeric(results$clpp_mod), as.numeric(config$target_clpp_mod_quantile)) 
-}
-else
+} else
 {
 	clpp_cutoff = as.numeric(config$target_clpp_mod_score)
 }
 
 coloc_passing = results[as.numeric(results$clpp_mod) >= clpp_cutoff,]
+coloc_passing = coloc_passing[as.numeric(coloc_passing$n_snps) >= as.numeric(config$target_num_snps),]
 
 #########################################################
 ## We need to filter all lists to make sure they've
@@ -370,6 +368,7 @@ testable_snps = testable_snps[testable_snps$ref_snp %in% unique(results$ref_snp)
 ## Now we write summaries to a file
 #########################################################
 
+write_summary("Summary of filters:\n--------------------\n", append=FALSE)
 write_summary(sprintf("Unique GWAS loci:\t%d\n", length(unique(all_gwas_snps$locus))))
 write_summary(sprintf("Total number of unique pairs of SNP and GWAS trait\t%d\n", length(unique(paste(all_gwas_snps$ref_snp, all_gwas_snps$source_trait, sep="_")))))
 write_summary(sprintf("Total number of unique pairs of locus and GWAS trait\t%d\n", length(unique(paste(all_gwas_snps$locus, all_gwas_snps$source_trait, sep="_")))))
