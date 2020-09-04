@@ -51,6 +51,10 @@ main = function()
 	{
 		coloc_res_tmp = coloc_res
 		coloc_res_tmp$split_column = ""
+		if(!("split_factors" %in% names(strat)))
+		{
+			coloc_res_tmp$split_column = "no-split"
+		}
 		for (column in strat$split_factors)	
 		{
 			if (sum(coloc_res_tmp$split_column != "") == 0)
@@ -82,7 +86,9 @@ main = function()
 			for (bl in strat$gwas_blacklist)
 			{
 				coloc_res_tmp = coloc_res_tmp[coloc_res_tmp$gwas_label != bl,]
+				strat$gwas_remapping$new_order = strat$gwas_remapping$new_order[strat$gwas_remapping$new_order != bl]
 			}
+			coloc_res_tmp$gwas_label = factor(x=coloc_res_tmp$gwas_label, levels=strat$gwas_remapping$new_order)
 		}
 
 		coloc_res_tmp = collapse_axis_factors(coloc_res_tmp)
@@ -140,7 +146,7 @@ main = function()
 		}
 
 		### Plot coloc results
-		plot_heatmap(coloc_res_tmp, strat$out_dir)
+		plot_heatmap(coloc_res_tmp, strat)
 	}
 
 }
@@ -272,19 +278,27 @@ label_individual_cells = function(coloc_res)
 	return(coloc_res_tmp)
 } 
 
-plot_heatmap = function(coloc_res, out_sub_folder)
+plot_heatmap = function(coloc_res, strat)
 {
+	out_sub_folder = strat$out_dir
 	dir.create(paste0(plot_out_dir, "/", out_sub_folder), recursive = TRUE, showWarnings=FALSE)
-	splits = unique(levels(coloc_res[["split_column"]]))
+	if ("constrain_split" %in% names(strat))
+	{
+		splits = strat$constrain_split
+	} else
+	{
+		splits = unique(levels(coloc_res[["split_column"]]))
+	}
 	for (i in 1:length(splits))
 	{
 		split_col = splits[i]
 		
-		#print(paste0("Plotting by ", split_col))
+		print(paste0("Plotting by ", split_col))
 
 		tmp_data=coloc_res %>% 
 			filter(coloc_res[["split_column"]] == split_col)
-		
+		print(dim(tmp_data))
+
 		row_count = length(unique(tmp_data$y_factor))
 
 		max_chunk = floor(row_count / chunk_size + 1)
@@ -303,7 +317,7 @@ plot_heatmap = function(coloc_res, out_sub_folder)
 				num_tissues = 1
 			} else
 			{
-				num_tissues = length(unique(coloc_res$tissue))
+				num_tissues = length(levels(coloc_res$tissue))
 			}
 			num_vert_bars = num_cols / num_tissues - 1
 			num_rows = length(unique(tmp_chunk$y_factor))
@@ -320,8 +334,9 @@ plot_heatmap = function(coloc_res, out_sub_folder)
 			}
 			horz_breaks = cumsum(genes_per_locus$genes_at_locus)
 
-			margin_approx_size = 0.2*max(c(nchar(as.character(unique(tmp_chunk$y_factor))), 0))
-			
+			y_margin_approx_size = 0.2*max(c(nchar(as.character(unique(tmp_chunk$y_factor))), 0))
+			x_margin_approx_size = 0.2*max(c(nchar(as.character(unique(tmp_chunk$x_factor))), 0))+2
+
 			plot=plot_coloc_results_function(data = tmp_chunk)
 			
 			if (num_vert_bars != 0)
@@ -340,7 +355,7 @@ plot_heatmap = function(coloc_res, out_sub_folder)
 
 			if(save_plots) 
 			{
-				ggsave(filename = paste0(plot_out_dir, '/', out_sub_folder, '/CLPP_group_',levels(coloc_res[["split_column"]])[i],'.part', chunk, '.pdf'), plot = plot, width = margin_approx_size+(col_width*num_cols), height = margin_approx_size+(row_height*num_rows), limitsize = F)
+				ggsave(filename = paste0(plot_out_dir, '/', out_sub_folder, '/CLPP_group_',split_col,'.part', chunk, '.pdf'), plot = plot, width = y_margin_approx_size+(col_width*num_cols), height = x_margin_approx_size+(row_height*num_rows), limitsize = F)
 			}
 			
 		}
@@ -364,51 +379,58 @@ get_heatmap_classes = function(coloc_res)
 		      if ((sum((matches$qtl_type == "eqtl") & (matches$clpp_mod >= strong_threshold)) > 0) &&
 			      (sum((matches$qtl_type == "sqtl") & (matches$clpp_mod >= strong_threshold)) > 0))
 		      {
-			      return("strong-both")
+			      return("both")
 		      }
 		      if ((sum((matches$qtl_type == "eqtl") & (matches$clpp_mod >= strong_threshold)) > 0) &&
 			      (sum((matches$qtl_type == "sqtl") & (matches$clpp_mod >= strong_threshold)) == 0))
 		      {
-			      return("strong-eqtl")
+			      return("eqtl")
 		      }
 		      if ((sum((matches$qtl_type == "eqtl") & (matches$clpp_mod >= strong_threshold)) == 0) &&
 			      (sum((matches$qtl_type == "sqtl") & (matches$clpp_mod >= strong_threshold)) > 0))
 		      {
-			      return("strong-sqtl")
+			      return("sqtl")
 		      }
 		      if ((sum((matches$qtl_type == "eqtl") & (matches$clpp_mod >= weak_threshold)) > 0) &&
 			      (sum((matches$qtl_type == "sqtl") & (matches$clpp_mod >= weak_threshold)) > 0))
 		      {
-			      return("weak-both")
+			      return("both")
 		      }
 		      if ((sum((matches$qtl_type == "eqtl") & (matches$clpp_mod >= weak_threshold)) == 0) &&
 			      (sum((matches$qtl_type == "sqtl") & (matches$clpp_mod >= weak_threshold)) > 0))
 		      {
-			      return("weak-sqtl")
+			      return("sqtl")
 		      }
 		      if ((sum((matches$qtl_type == "eqtl") & (matches$clpp_mod >= weak_threshold)) > 0) &&
 			      (sum((matches$qtl_type == "sqtl") & (matches$clpp_mod >= weak_threshold)) == 0))
 		      {
-			      return("weak-eqtl")
+			      return("eqtl")
 		      }
 		      return("none")
 	      }
 	)
 
 	coloc_res$coloc_class = classes
+	
 	coloc_res$coloc_class=factor(x = coloc_res$coloc_class, 
 	levels=c("none", 
-		 "weak-sqtl",  
-		 "strong-sqtl",  
-		 "weak-eqtl",
-		 "strong-eqtl",
-		 "weak-both",
-		 "strong-both"))
+		 "sqtl",  
+		 "eqtl",
+		 "both"))
 }
 
 collapse_axis_factors = function(coloc_file)
 {
 	coloc_res = coloc_file
+
+	if ("locus_selection_list" %in% names(config))
+	{
+		coloc_res = coloc_res %>% filter(locus %in% config$locus_selection_list)
+	}
+	if ("gene_selection_list" %in% names(config))
+	{
+		coloc_res = coloc_res %>% filter(ensembl %in% config$gene_selection_list)
+	}
 
 	# Collapse genes by locus
 	# Remove all but the best coloc at each locus, regardless of gene
