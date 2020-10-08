@@ -28,7 +28,7 @@ if ("chunk_size" %in% names(config))
 {
 	chunk_size = as.numeric(config$chunk_size)
 }
-row_height=0.2
+row_height=0.21
 col_width=0.2
 
 # Load color scheme
@@ -335,7 +335,7 @@ plot_heatmap = function(coloc_res, strat)
 			horz_breaks = cumsum(genes_per_locus$genes_at_locus)
 
 			y_margin_approx_size = 0.2*max(c(nchar(as.character(unique(tmp_chunk$y_factor))), 0))
-			x_margin_approx_size = 0.2*max(c(nchar(as.character(unique(tmp_chunk$x_factor))), 0))+2
+			x_margin_approx_size = 0.2*max(c(nchar(as.character(unique(tmp_chunk$x_factor))), 0))+1.3
 
 			plot=plot_coloc_results_function(data = tmp_chunk)
 			

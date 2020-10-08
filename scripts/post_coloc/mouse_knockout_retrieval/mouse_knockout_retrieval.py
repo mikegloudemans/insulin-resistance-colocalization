@@ -46,14 +46,14 @@ def main():
     de_gene_set = get_genes_from_de(de_results_file)
 
     retrieve_and_write_knockouts(coloc_gene_set, "coloc")    
-    retrieve_and_write_knockouts(de_gene_set, "de")    
+    #retrieve_and_write_knockouts(de_gene_set, "de")    
 
 def retrieve_and_write_knockouts(gene_set, prefix):
 
     mp_phenos = load_ontology(mp_ontology_file)
     mp_tree = load_pheno_tree(mp_pheno_tree_file)
 
-    mp_phenos = filter_phenos(mp_phenos, mp_tree, required_parents)
+    mp_phenos, mp_parents = filter_phenos(mp_phenos, mp_tree, required_parents)
   
     print "-----------------------"
 
@@ -69,49 +69,54 @@ def retrieve_and_write_knockouts(gene_set, prefix):
     print len(human_to_mouse.keys())
 
     # Get phenotypes corresponding to the gene knockouts in MGI
-    impc_gene_phenos = get_impc_gene_phenos(human_to_mouse, impc_gene_to_pheno_file)
+    #impc_gene_phenos = get_impc_gene_phenos(human_to_mouse, impc_gene_to_pheno_file)
     gene_phenos = get_gene_phenos(human_to_mouse)
     
     print "Number genes with at least one knockout mouse in MGI:"
     print len([gp for gp in gene_phenos if len(gene_phenos[gp]) != 0])
 
     print "Number genes with at least one knockout mouse in IMPC:"
-    print len([gp for gp in impc_gene_phenos if len(impc_gene_phenos[gp]) != 0])
+    #print len([gp for gp in impc_gene_phenos if len(impc_gene_phenos[gp]) != 0])
 
     # Write an output file mapping human genes to the corresponding mouse phenotypes
-    write_output_file(gene_set, mp_phenos, gene_phenos, human_to_mouse, out_file.format(prefix))
-    write_output_file(gene_set, mp_phenos, impc_gene_phenos, human_to_mouse, impc_out_file.format(prefix))
+    write_output_file(gene_set, mp_phenos, mp_parents, gene_phenos, human_to_mouse, out_file.format(prefix))
+    #write_output_file(gene_set, mp_phenos, mp_parents, impc_gene_phenos, human_to_mouse, impc_out_file.format(prefix))
 
 def filter_phenos(mp_phenos, mp_tree, required_parents):
     filtered_phenos = copy.deepcopy(mp_phenos)
+
+    parents = {}
 
     for pheno in mp_phenos:
         valid = False
         current_pheno = pheno
         while current_pheno != "":
             if current_pheno in required_parents:
+                parents[pheno] = current_pheno
                 valid = True
                 break
             current_pheno = mp_tree.get(current_pheno, "")
         if not valid:
             del filtered_phenos[pheno]
 
-    return filtered_phenos
+    return filtered_phenos, parents
 
-def write_output_file(gene_set, mp_phenos, gene_phenos, human_to_mouse, out_file):
+def write_output_file(gene_set, mp_phenos, mp_parents, gene_phenos, human_to_mouse, out_file):
     with open(out_file, "w") as w:
-        w.write("human_gene\tmouse_gene\tphenotypes\n")
+        w.write("human_gene\tmouse_gene\tphenotypes\tparents\n")
         for gene in sorted(list(gene_set)):
             if gene in gene_phenos:
                 if len(gene_phenos[gene]) == 0:
                     pheno_formatted = "no_knockout_mice"
+                    parents = "NA"
                 else:
                     pheno_formatted = ",".join([pheno + ":" + mp_phenos[pheno].strip().replace(" ", "_").replace(",", "") for pheno in gene_phenos[gene] if pheno in mp_phenos])
+                    parents = list(set([mp_parents[pheno] + ":" + mp_phenos[mp_parents[pheno]].strip().replace(" ", "_").replace(",", "") for pheno in gene_phenos[gene] if pheno in mp_phenos]))
                 if pheno_formatted == "":
                     pheno_formatted = "no_relevant_phenotypes_found"
             else:
                 pheno_formatted = "no_mouse_ortholog_found"
-            w.write("{0}\t{1}\t{2}\n".format(gene, human_to_mouse.get(gene, "NA"), pheno_formatted))
+            w.write("{0}\t{1}\t{2}\t{3}\n".format(gene, human_to_mouse.get(gene, "NA"), pheno_formatted), parents)
 
 def load_pheno_tree(mp_pheno_tree_file):
     pheno_tree = {}
