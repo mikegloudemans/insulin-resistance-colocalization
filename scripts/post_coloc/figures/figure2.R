@@ -63,7 +63,7 @@ coloc_res_copy = coloc_res
 coloc_res_copy$step2[(coloc_res_copy$step2 %in% c("AdpS", "AdpV", "AdpV+S", "Liver", "Musk")) & (coloc_res_copy$pancreas == "weak")] = "Other"
 coloc_res_copy$pancreas[coloc_res_copy$pancreas != "none"] = "present"
 coloc_res_copy$pancreas[coloc_res_copy$pancreas == "none"] = "absent"
-coloc_res_copy$pancreas = factor(coloc_res_copy$pancreas, levels=c("present", "absent"))
+coloc_res_copy$pancreas = factor(coloc_res_copy$pancreas, levels=c("absent", "present"))
 
 number_subcats = coloc_res_copy %>% group_by(step2, pancreas) %>% summarize(count = length(unique(locus)))
 number_subcats = number_subcats[number_subcats$step2 != "None",]
