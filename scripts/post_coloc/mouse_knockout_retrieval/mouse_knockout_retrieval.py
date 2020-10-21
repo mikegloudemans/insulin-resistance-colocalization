@@ -29,8 +29,8 @@ impc_gene_to_pheno_file = "data/mouse_knockouts/ALL_genotype_phenotype.csv.gz"
 human_mouse_map_file = "data/mouse_knockouts/HMD_HumanPhenotype.rpt"
 mp_ontology_file = "data/mouse_knockouts/VOC_MammalianPhenotype.rpt"
 mp_pheno_tree_file = "data/mouse_knockouts/MPheno_OBO.ontology"
-out_file = "output/post_coloc/2020-05-11/refiltered/eqtls_and_sqtls/{0}_mouse_knockout_phenos_mgi.txt"
-impc_out_file = "output/post_coloc/2020-05-11/refiltered/eqtls_and_sqtls/{0}_mouse_knockout_phenos_impc.txt"
+out_file = "output/post_coloc/2020-05-11/refiltered/eqtls_and_sqtls/mouse_knockouts/{0}_mouse_knockout_phenos_mgi.txt"
+impc_out_file = "output/post_coloc/2020-05-11/refiltered/eqtls_and_sqtls/mouse_knockouts/{0}_mouse_knockout_phenos_impc.txt"
 
 required_parents = ["MP:0010769", # mortality / aging -- contains lethal phenotype
                     "MP:0002873", # normal phenotype / no abnormality
@@ -116,7 +116,7 @@ def write_output_file(gene_set, mp_phenos, mp_parents, gene_phenos, human_to_mou
                     pheno_formatted = "no_relevant_phenotypes_found"
             else:
                 pheno_formatted = "no_mouse_ortholog_found"
-            w.write("{0}\t{1}\t{2}\t{3}\n".format(gene, human_to_mouse.get(gene, "NA"), pheno_formatted), parents)
+            w.write("{0}\t{1}\t{2}\t{3}\n".format(gene, human_to_mouse.get(gene, "NA"), pheno_formatted, parents))
 
 def load_pheno_tree(mp_pheno_tree_file):
     pheno_tree = {}
