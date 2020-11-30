@@ -18,14 +18,30 @@ gwas_aliases = \
     "Type-2-Diabetes_Suzuki_2019_txt_gz" : "data/gwas/formatted/sumstats/hg38/Type-2-Diabetes_Suzuki_2019/Type-2-Diabetes_Suzuki_2019.txt.gz"
 }
 
+lipid_traits = [gwas_aliases["HDL_GLGC_Expanded_txt_gz"],
+                gwas_aliases["TG_GLGC_Expanded_txt_gz"]]
+whr_traits = [gwas_aliases["WHR-adj-BMI_GIANT_2018_txt_gz"]]
+glucose_traits = [gwas_aliases["T2D_Mahajan_Europeans_txt_gz"],
+                    gwas_aliases["Type-2-Diabetes_Xue_2018_txt_gz"],
+                    gwas_aliases["Type-2-Diabetes_Spracklen_2020_txt_gz"],
+                    gwas_aliases["Type-2-Diabetes_Suzuki_2019_txt_gz"],
+                    gwas_aliases["MAGIC_ISI_Model_2_AgeSexBMI_txt_txt_gz"],
+                    gwas_aliases["FastGlu_MAGIC_Europeans_txt_gz"],
+                    gwas_aliases["FastInsu_adjBMI_MAGIC_Europeans_txt_gz"]]
+                # MI not included because directionality not clear to me right now
+
 
 # First, load coloc info
 coloced_genes = {}
+liver_lipids_coloced_genes = {}
+adipose_whr_coloced_genes = {}
+muscle_glucose_coloced_genes = {}
 with open("output/post_coloc/2020-05-11/refiltered/eqtls_and_sqtls/clpp_results_categorized_2020-05-11.txt") as f:
     f.readline()
     for line in f:
         data = line.strip().split("\t")
         ensembl = data[11]
+        hgnc = data[12]
         clpp_mod = float(data[14])
         eqtl_file = data[9]
         gwas_file = gwas_aliases[data[8].replace(".", "_")] 
@@ -43,22 +59,17 @@ with open("output/post_coloc/2020-05-11/refiltered/eqtls_and_sqtls/clpp_results_
         # Is GWAS risk associated with increased or decreased expression?
 
         print gwas_file
-
+        print eqtl_file
         # Get GWAS SNP
         with gzip.open(gwas_file) as f:
             g_head = f.readline().strip().split()
         g_rsid_index = g_head.index("rsid")
         g_effect_allele_index = g_head.index("effect_allele")
         g_non_effect_allele_index = g_head.index("non_effect_allele")
-        beta_style = False
         if "effect_direction" in g_head:
             g_direction_index = g_head.index("effect_direction")
-        elif "beta" in g_head:
-            g_direction_index = g_head.index("beta")
-            beta_style = True
-        else:
-            g_direction_index = g_head.index("direction")
         gwas_data = subprocess.check_output("tabix {0} {1}:{2}-{2}".format(gwas_file, chrom, pos), shell=True).strip().split("\n")
+        found = False
         for gd in gwas_data:
             g_dat = gd.split("\t")
             if g_dat[g_rsid_index] != rsid:
@@ -66,11 +77,12 @@ with open("output/post_coloc/2020-05-11/refiltered/eqtls_and_sqtls/clpp_results_
             else:
                 g_ea = g_dat[g_effect_allele_index]
                 g_oa = g_dat[g_non_effect_allele_index]
-                if beta_style:
-                    g_dir = float(g_dat[g_direction_index]) > 0
-                else:
-                    g_dir = g_dat[g_direction_index] == "+"
+                g_dir = g_dat[g_direction_index] == "+"
+                found = True
                 break
+
+        if not found:
+            continue
 
         # Get eQTL SNP
         with gzip.open(eqtl_file) as f:
@@ -79,6 +91,7 @@ with open("output/post_coloc/2020-05-11/refiltered/eqtls_and_sqtls/clpp_results_
         e_non_effect_allele_index = e_head.index("ref")
         e_direction_index = e_head.index("beta")
         eqtl_data = subprocess.check_output("tabix {0} {1}:{2}-{2}".format(eqtl_file, chrom, pos), shell=True).strip().split("\n")
+        found = False
         for ed in eqtl_data:
             e_dat = ed.split("\t")
             if ensembl not in ed:
@@ -87,9 +100,13 @@ with open("output/post_coloc/2020-05-11/refiltered/eqtls_and_sqtls/clpp_results_
                 e_ea = e_dat[e_effect_allele_index]
                 e_oa = e_dat[e_non_effect_allele_index]
                 e_dir = float(e_dat[e_direction_index]) > 0
+                found = True
                 break
 
-        print g_ea, g_oa, g_dir, e_ea, e_oa, e_dir
+        if not found:
+            continue
+
+        print rsid, chrom, pos, g_ea, g_oa, g_dir, e_ea, e_oa, e_dir
 
         if not (((g_ea == e_ea) and (g_oa == e_oa)) or ((g_ea == e_oa) and (g_oa == e_ea))):
             print "discrepancy"
@@ -104,7 +121,26 @@ with open("output/post_coloc/2020-05-11/refiltered/eqtls_and_sqtls/clpp_results_
         if ensembl not in coloced_genes:
             coloced_genes[ensembl] = []
 
-        coloced_genes[ensembl].append((gwas_file, eqtl_file, chrom, pos, clpp_mod, g_ea, g_oa, g_dir, e_ea, e_oa, e_dir, same_refs, same_effect_dirs, higher_expression_higher_risk))
+        coloced_genes[ensembl].append((hgnc, gwas_file, eqtl_file, chrom, pos, clpp_mod, g_ea, g_oa, g_dir, e_ea, e_oa, e_dir, same_refs, same_effect_dirs, higher_expression_higher_risk))
+
+        if "Liver" in eqtl_file and gwas_file in lipid_traits:
+            if ensembl not in liver_lipids_coloced_genes:
+                liver_lipids_coloced_genes[ensembl] = []
+
+            liver_lipids_coloced_genes[ensembl].append((hgnc, gwas_file, eqtl_file, chrom, pos, clpp_mod, g_ea, g_oa, g_dir, e_ea, e_oa, e_dir, same_refs, same_effect_dirs, higher_expression_higher_risk))
+
+        if "Adipose" in eqtl_file and gwas_file in whr_traits:
+            if ensembl not in adipose_whr_coloced_genes:
+                adipose_whr_coloced_genes[ensembl] = []
+
+            adipose_whr_coloced_genes[ensembl].append((hgnc, gwas_file, eqtl_file, chrom, pos, clpp_mod, g_ea, g_oa, g_dir, e_ea, e_oa, e_dir, same_refs, same_effect_dirs, higher_expression_higher_risk))
+
+        if "Muscle" in eqtl_file and gwas_file in glucose_traits:
+            if ensembl not in muscle_glucose_coloced_genes:
+                muscle_glucose_coloced_genes[ensembl] = []
+
+            muscle_glucose_coloced_genes[ensembl].append((hgnc, gwas_file, eqtl_file, chrom, pos, clpp_mod, g_ea, g_oa, g_dir, e_ea, e_oa, e_dir, same_refs, same_effect_dirs, higher_expression_higher_risk))
+
 
 # Also load single-coloc genes
 # NOTE: Currently this might miss a few -- I should really cross-reference with ENSGs to be sure
@@ -113,34 +149,42 @@ with open("data/curated_gene_sets/single_coloc_genes_updated_matched_background.
     for line in f:
         single_coloc_genes.add(line.strip().split()[1])
 
-# For each perturbation-tissue combo...
-perturb_tissues = glob.glob("data/de_genes/*/*.txt")
-with open("output/post_coloc/de_genes/perturbation_by_coloc.txt", "w") as w:
-    w.write("pert_tissue\tperturbation\tpert_direction\tgene\tgwas_file\teqtl_file\tchrom\tpos\tclpp_mod\tg_ea\tg_oa\tg_dir\te_ea\te_oa\te_dir\tsame_refs\tsame_effect_dirs\thigher_expression_higher_risk\n")
-    for pt in perturb_tissues:
+single_coloc_set = {scg: coloced_genes[scg] for scg in coloced_genes if scg in single_coloc_genes}
 
-        with open(pt) as f:
+def annotate_gene_set(gene_set, gene_set_name):
 
-            f.readline()
+    # For each perturbation-tissue combo...
+    perturb_tissues = glob.glob("data/de_genes/*/*.txt")
+    with open("output/post_coloc/de_genes/perturbation_by_{0}.txt".format(gene_set_name), "w") as w:
+        w.write("pert_tissue\tperturbation\tpert_direction\tgene\thgnc\tgwas_file\teqtl_file\tchrom\tpos\tclpp_mod\tg_ea\tg_oa\tg_dir\te_ea\te_oa\te_dir\tsame_refs\tsame_effect_dirs\thigher_expression_higher_risk\tperturbation_increases_risk\n")
+        for pt in perturb_tissues:
 
-            for line in f:
-                data = line.strip().split()
-                # Determine which of the genes have colocalizations with eQTLs (forget tissue-specificity of colocs for now,
-                # and just take all of them even if multi-coloc loci for now)
-               
-                if len(data) < 9:
-                    continue
+            with open(pt) as f:
 
-                if data[9] != "TRUE":
-                    continue
+                f.readline()
 
-                # For each that has actual coloc...
-                #if data[2] in coloced_genes:
-                if data[2] in single_coloc_genes and data[2] in coloced_genes:
+                for line in f:
+                    data = line.strip().split()
                    
-                    direction = float(data[5]) > 0
+                    if len(data) < 9:
+                        continue
 
-                    for cg in coloced_genes[data[2]]:
+                    if data[9] != "TRUE":
+                        continue
 
-                        w.write("{0}\t{1}\t{2}\t{3}\t{4}\n".format(data[0], data[1], direction, data[2], "\t".join([str(c) for c in cg])))
-                
+                    # For each that has actual coloc...
+                    if data[2] in gene_set:
+                       
+                        direction = float(data[5]) > 0
+
+                        for cg in gene_set[data[2]]:
+
+                            w.write("{0}\t{1}\t{2}\t{3}\t{4}\t{5}\n".format(data[0], data[1], direction, data[2], "\t".join([str(c) for c in cg]), direction == cg[-1]))
+
+
+annotate_gene_set(coloced_genes, "coloc")
+annotate_gene_set(single_coloc_set, "single_coloc")
+annotate_gene_set(liver_lipids_coloced_genes, "liver_lipids_coloc")
+annotate_gene_set(adipose_whr_coloced_genes, "adipose_whr_coloc")
+annotate_gene_set(muscle_glucose_coloced_genes, "muscle_glucose_coloc")
+
