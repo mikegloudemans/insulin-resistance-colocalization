@@ -59,8 +59,8 @@ main = function() {
 	###############################################
 
 	# Dummy data; load real data later
-	tissue_colors = c("#FF6600", "#FFAA00", "#AABB66", "#995522", "#AAAAFF")
-	tissues = c("Adipose-Subcutaneous", "Adipose-Visceral", "Liver", "Pancreas", "Skeletal-Muscle")
+	tissue_colors = c("#FF6600", "#FFAA00", "#AABB66", "#AAAAFF", "#995522")
+	tissues = c("Adipose (Sub)", "Adipose (Visc)", "Liver", "Muscle", "Pancreas")
 	#gene_overlaps = c(50000, 50000, 50000, 50000, 50000)
 	gene_overlaps = overlap_counts$gene_count
 	#gene_qtl_overlaps = c(3000, 6000, 2000, 1000, 2000)
@@ -152,11 +152,29 @@ main = function() {
 
 
 	# (these numbers were generated above in the section for the panel g_a that is no longer used)
-	tissue_qtls = data.frame(list(tissue=strong_coloc_counts$tissue, eqtl=eqtl_strong_coloc_counts$gene_count, sqtl=sqtl_strong_coloc_counts$gene_count, either=strong_coloc_counts$gene_count, samples_sizes = sample_sizes , egenes=egenes, sgenes=sgenes))
+	tissue_qtls = data.frame(list(tissue=strong_coloc_counts$tissue, eqtl=eqtl_strong_coloc_counts$gene_count, sqtl=sqtl_strong_coloc_counts$gene_count, either=strong_coloc_counts$gene_count, sample_sizes = sample_sizes , egenes=egenes, sgenes=sgenes))
 
-	tissue_eqtls = data.frame(list(x=tissue_qtls$egenes, y=tissue_qtls$eqtl, type="eqtl", tissue=tissue_qtls$tissue))
-	tissue_sqtls = data.frame(list(x=tissue_qtls$sgenes, y=tissue_qtls$sqtl, type="sqtl", tissue=tissue_qtls$tissue))
+	tissue_eqtls = data.frame(list(x=tissue_qtls$egenes, y=tissue_qtls$eqtl, type="eqtl", tissue=tissues))
+	tissue_sqtls = data.frame(list(x=tissue_qtls$sgenes, y=tissue_qtls$sqtl, type="sqtl", tissue=tissues))
 
+	all = rbind(tissue_eqtls, tissue_sqtls)
+
+	g_b_supp = ggplot(all, aes(x=x, y=y, color=tissue, shape=type)) +
+		geom_point(size=3) +
+		theme_minimal() +
+		scale_color_manual(values=tissue_colors)+
+		xlim(c(0,max(all$x)))+
+		ylim(c(0,max(all$y)))+
+		xlab("# eGenes / sGenes")+
+		ylab("# eQTL / sQTL tests colocalized")
+	g_b_supp
+
+	# ^ This part is supplementary
+	# v This part is not
+
+	tissue_eqtls = data.frame(list(x=tissue_qtls$sample_sizes, y=tissue_qtls$eqtl, type="eqtl", tissue=tissues))
+	tissue_sqtls = data.frame(list(x=tissue_qtls$sample_sizes, y=tissue_qtls$sqtl, type="sqtl", tissue=tissues))
+	
 	all = rbind(tissue_eqtls, tissue_sqtls)
 
 	g_b = ggplot(all, aes(x=x, y=y, color=tissue, shape=type)) +
@@ -165,9 +183,11 @@ main = function() {
 		scale_color_manual(values=tissue_colors)+
 		xlim(c(0,max(all$x)))+
 		ylim(c(0,max(all$y)))+
-		xlab("# eGenes / sGenes")+
+		xlab("Tissue sample size")+
 		ylab("# eQTL / sQTL tests colocalized")
 	g_b
+
+
 
 	###############################################
 	# Panel: colocs per GWAS (prob add some #s)
