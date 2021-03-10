@@ -7,7 +7,7 @@ single_coloc_genes = read.table("data/curated_gene_sets/single_coloc_genes_updat
 data = read.table("output/post_coloc/de_genes/coloc_directionality.txt", sep="\t", header=TRUE)
 data$higher_expression_higher_risk = data$higher_expression_higher_risk == "True"
 directions = data %>% filter(clpp_mod > 0.35) %>% filter(hgnc %in% single_coloc_genes[,1]) %>% group_by(hgnc, gwas_file) %>% summarize(hehr = sum(!higher_expression_higher_risk) == 0, helr = sum(higher_expression_higher_risk) == 0)
-directions = directions %>% filter(!grepl("ISI", x))
+directions = directions %>% filter(!grepl("ISI", gwas_file)) # Because they're aren't any of these in
 sum(!directions$hehr & !directions$helr)
 
 directions$direction = "unclear"
@@ -27,7 +27,6 @@ directions = directions %>% filter(!((hgnc == "UBE3C") & (hehr)))
 
 directions$gwas_file = factor(directions$gwas_file, levels = c(
 							       "data/gwas/formatted/sumstats/hg38/MI_adjBMI_European/MI_adjBMI_European.txt.gz", 
-							       "data/gwas/formatted/sumstats/hg38/MAGIC_ISI_Model_2_AgeSexBMI.txt/MAGIC_ISI_Model_2_AgeSexBMI.txt.txt.gz", 
 							       "data/gwas/formatted/sumstats/hg38/FastInsu_adjBMI_MAGIC_Europeans/FastInsu_adjBMI_MAGIC_Europeans.txt.gz", 
 							       "data/gwas/formatted/sumstats/hg38/FastGlu_MAGIC_Europeans/FastGlu_MAGIC_Europeans.txt.gz",
 							       "T2D", 
@@ -36,7 +35,7 @@ directions$gwas_file = factor(directions$gwas_file, levels = c(
 							       "data/gwas/formatted/sumstats/hg38/HDL_GLGC_Expanded/HDL_GLGC_Expanded.txt.gz",
 							       "data/gwas/formatted/sumstats/hg38/BMI_GIANT_2018/BMI_GIANT_2018.txt.gz"
 							       ),
-			      	labels = c("MI", "ISI", "FastInsu", "FastGlu", "T2D", "WHR", "TG", "HDL", "BMI"))
+			      	labels = c("MI", "FastInsu", "FastGlu", "T2D", "WHR", "TG", "HDL", "BMI"))
 
 types = directions %>% group_by(hgnc) %>% summarize(t2d_up = sum(gwas_file %in% c("MI", "ISI", "FastInsu", "FastGlu", "T2D") & hehr) > 0,
 						    t2d_down = sum(gwas_file %in% c("MI", "ISI", "FastInsu", "FastGlu", "T2D") & helr) > 0,

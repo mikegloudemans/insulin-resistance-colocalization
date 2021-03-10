@@ -18,6 +18,8 @@ gwas_aliases = \
     "Type-2-Diabetes_Suzuki_2019_txt_gz" : "data/gwas/formatted/sumstats/hg38/Type-2-Diabetes_Suzuki_2019/Type-2-Diabetes_Suzuki_2019.txt.gz"
 }
 
+# NOTE: If the ref SNP (top GWAS hit) is not actually in the eQTL file,
+# then it currently won't work out for that locus
 
 # First, load coloc info
 coloc_tested_genes = {}
