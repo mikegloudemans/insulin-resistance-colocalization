@@ -24,22 +24,29 @@ results$strand = ensembl_locs[match(results$ensembl, ensembl_locs$feature),]$str
 results = results %>% filter(clpp_mod > 0.35)
 
 # Get distance from coloc SNPs to TSS's of coloc'ed genes
-all_tss_dists = results %>% group_by(chr, pos, ensembl) %>% summarize(tss_dist = abs(pos[1]-gene_start[1]) * ifelse(strand[1]=="-",-1,1))
-eqtl_tss_dists = results %>% filter(clpp_mod > 0.35) %>% filter(grepl("eQTL", eqtl_file)) %>% group_by(chr, pos, ensembl) %>% summarize(tss_dist = abs(pos[1]-gene_start[1]) * ifelse(strand[1]=="-",-1,1))
-sqtl_tss_dists = results %>% filter(clpp_mod > 0.35) %>% filter(grepl("sQTL", eqtl_file)) %>% group_by(chr, pos, ensembl) %>% summarize(tss_dist = abs(pos[1]-gene_start[1]) * ifelse(strand[1]=="-",-1,1))
+all_tss_dists = results %>% group_by(chr, pos, ensembl) %>% summarize(tss_dist = (pos[1]-gene_start[1]) * ifelse(strand[1]=="-",-1,1))
+eqtl_tss_dists = results %>% filter(clpp_mod > 0.35) %>% filter(grepl("eQTL", eqtl_file)) %>% group_by(chr, pos, ensembl) %>% summarize(tss_dist = (pos[1]-gene_start[1]) * ifelse(strand[1]=="-",-1,1))
+sqtl_tss_dists = results %>% filter(clpp_mod > 0.35) %>% filter(grepl("sQTL", eqtl_file)) %>% group_by(chr, pos, ensembl) %>% summarize(tss_dist = (pos[1]-gene_start[1]) * ifelse(strand[1]=="-",-1,1))
 
+print(head(all_tss_dists))
 
-all_single_coloc_tss_dists = results %>% filter(clpp_mod > 0.35) %>% filter((step1 == "loci_2") | (step1 == "loci_0.1")) %>% group_by(chr, pos, ensembl) %>% summarize(tss_dist = abs(pos[1]-gene_start[1]) * ifelse(strand[1]=="-",-1,1))
-eqtl_single_coloc_tss_dists = results %>% filter(clpp_mod > 0.35) %>% filter((step1 == "loci_2") | (step1 == "loci_0.1")) %>% filter(grepl("eQTL", eqtl_file)) %>% group_by(chr, pos, ensembl) %>% summarize(tss_dist = abs(pos[1]-gene_start[1]) * ifelse(strand[1]=="-",-1,1))
-sqtl_single_coloc_tss_dists = results %>% filter(clpp_mod > 0.35) %>% filter((step1 == "loci_2") | (step1 == "loci_0.1")) %>% filter(grepl("sQTL", eqtl_file)) %>% group_by(chr, pos, ensembl) %>% summarize(tss_dist = abs(pos[1]-gene_start[1]) * ifelse(strand[1]=="-",-1,1))
-
+all_single_coloc_tss_dists = results %>% filter(clpp_mod > 0.35) %>% filter((step1 == "loci_2") | (step1 == "loci_0.1")) %>% group_by(chr, pos, ensembl) %>% summarize(tss_dist = (pos[1]-gene_start[1]) * ifelse(strand[1]=="-",-1,1))
+eqtl_single_coloc_tss_dists = results %>% filter(clpp_mod > 0.35) %>% filter((step1 == "loci_2") | (step1 == "loci_0.1")) %>% filter(grepl("eQTL", eqtl_file)) %>% group_by(chr, pos, ensembl) %>% summarize(tss_dist = (pos[1]-gene_start[1]) * ifelse(strand[1]=="-",-1,1))
+sqtl_single_coloc_tss_dists = results %>% filter(clpp_mod > 0.35) %>% filter((step1 == "loci_2") | (step1 == "loci_0.1")) %>% filter(grepl("sQTL", eqtl_file)) %>% group_by(chr, pos, ensembl) %>% summarize(tss_dist = (pos[1]-gene_start[1]) * ifelse(strand[1]=="-",-1,1))
 breaks = seq(-1e+06, 1e+06, by = 20000)
 hist(all_tss_dists$tss_dist, breaks=breaks)
+print(median(all_tss_dists$tss_dist, na.rm=TRUE))
+abline(v=median(all_tss_dists$tss_dist, na.rm=TRUE), lwd=4, col="red", lty=3)
 hist(eqtl_tss_dists$tss_dist, breaks=breaks)
+abline(v=median(eqtl_tss_dists$tss_dist, na.rm=TRUE), lwd=4, col="red", lty=3)
 hist(sqtl_tss_dists$tss_dist, breaks=breaks)
+abline(v=median(sqtl_tss_dists$tss_dist, na.rm=TRUE), lwd=4, col="red", lty=3)
 hist(all_single_coloc_tss_dists$tss_dist, breaks=breaks)
+abline(v=median(all_single_coloc_tss_dists$tss_dist), lwd=4, col="red", lty=3)
 hist(eqtl_single_coloc_tss_dists$tss_dist, breaks=breaks)
+abline(v=median(eqtl_single_coloc_tss_dists$tss_dist), lwd=4, col="red", lty=3)
 hist(sqtl_single_coloc_tss_dists$tss_dist, breaks=breaks)
+abline(v=median(sqtl_single_coloc_tss_dists$tss_dist), lwd=4, col="red", lty=3)
 
 all_tss_dists$coloc_proximity_rank = sapply(1:dim(all_tss_dists)[1], function(x)
        {

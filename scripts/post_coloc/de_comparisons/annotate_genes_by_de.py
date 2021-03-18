@@ -1,6 +1,7 @@
 import glob
 import subprocess
 import gzip
+import os
 
 gwas_aliases = \
 {
@@ -30,8 +31,13 @@ glucose_traits = [gwas_aliases["T2D_Mahajan_Europeans_txt_gz"],
                     gwas_aliases["FastInsu_adjBMI_MAGIC_Europeans_txt_gz"]]
                 # MI not included because directionality not clear to me right now
 
+if os.path.isfile("output/post_coloc/de_genes/not_found.txt"):
+    os.remove("output/post_coloc/de_genes/not_found.txt")
 
 # First, load coloc info
+
+hgnc_to_ensembl_map = {}
+
 coloced_genes = {}
 liver_lipids_coloced_genes = {}
 adipose_whr_coloced_genes = {}
@@ -49,9 +55,9 @@ with open("output/post_coloc/2020-05-11/refiltered/eqtls_and_sqtls/clpp_results_
         chrom = data[1]
         pos = data[2]
 
-        # We have to just disregard sQTLs for now
-        if "sQTL" in data[7]:
-            continue
+        ## We have to just disregard sQTLs for now
+        #if "sQTL" in data[7]:
+        #    continue
 
         if clpp_mod < 0.35:
             continue
@@ -82,6 +88,8 @@ with open("output/post_coloc/2020-05-11/refiltered/eqtls_and_sqtls/clpp_results_
                 break
 
         if not found:
+            with open("output/post_coloc/de_genes/not_found.txt", "a") as a:
+                a.write("{0}\t{1}\t{2}\n".format(hgnc, ensembl, gwas_file))
             continue
 
         # Get eQTL SNP
@@ -104,6 +112,8 @@ with open("output/post_coloc/2020-05-11/refiltered/eqtls_and_sqtls/clpp_results_
                 break
 
         if not found:
+            with open("output/post_coloc/de_genes/not_found.txt", "a") as a:
+                a.write("{0}\t{1}\t{2}\n".format(hgnc, ensembl, gwas_file))
             continue
 
         print rsid, chrom, pos, g_ea, g_oa, g_dir, e_ea, e_oa, e_dir
@@ -120,6 +130,7 @@ with open("output/post_coloc/2020-05-11/refiltered/eqtls_and_sqtls/clpp_results_
 
         if ensembl not in coloced_genes:
             coloced_genes[ensembl] = []
+            hgnc_to_ensembl_map[hgnc] = ensembl
 
         coloced_genes[ensembl].append((hgnc, gwas_file, eqtl_file, chrom, pos, clpp_mod, g_ea, g_oa, g_dir, e_ea, e_oa, e_dir, same_refs, same_effect_dirs, higher_expression_higher_risk))
 
@@ -145,9 +156,12 @@ with open("output/post_coloc/2020-05-11/refiltered/eqtls_and_sqtls/clpp_results_
 # Also load single-coloc genes
 # NOTE: Currently this might miss a few -- I should really cross-reference with ENSGs to be sure
 single_coloc_genes = set([])
-with open("data/curated_gene_sets/single_coloc_genes_updated_matched_background.txt") as f:
+with open("data/curated_gene_sets/single_coloc_genes_updated.txt") as f:
     for line in f:
-        single_coloc_genes.add(line.strip().split()[1])
+        data = line.strip()
+        if data in hgnc_to_ensembl_map:
+            print data
+            single_coloc_genes.add(hgnc_to_ensembl_map[data])
 
 single_coloc_set = {scg: coloced_genes[scg] for scg in coloced_genes if scg in single_coloc_genes}
 
@@ -155,7 +169,7 @@ def annotate_gene_set(gene_set, gene_set_name):
 
     # For each perturbation-tissue combo...
     perturb_tissues = glob.glob("data/de_genes/*/*.txt")
-    with open("output/post_coloc/de_genes/perturbation_by_{0}.txt".format(gene_set_name), "w") as w:
+    with open("output/post_coloc/de_genes/perturbation_by_{0}_with_sqtl.txt".format(gene_set_name), "w") as w:
         w.write("pert_tissue\tperturbation\tpert_direction\tgene\thgnc\tgwas_file\teqtl_file\tchrom\tpos\tclpp_mod\tg_ea\tg_oa\tg_dir\te_ea\te_oa\te_dir\tsame_refs\tsame_effect_dirs\thigher_expression_higher_risk\tperturbation_increases_risk\n")
         for pt in perturb_tissues:
 

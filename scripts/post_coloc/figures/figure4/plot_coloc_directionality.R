@@ -71,7 +71,7 @@ plot_figure = function(data) {
 			legend.text = element_text(size=5), 
 			legend.title = element_text(size = 7),
 			) +
-		scale_x_discrete(drop=FALSE)
+		scale_x_discrete(drop=drop)
 
 }
 plot_figure(directions)	
