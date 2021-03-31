@@ -42,23 +42,13 @@ cutoff_gwas_pval = as.numeric(class_config$pre_filters$max_gwas_pval)
 cutoff_eqtl_pval = as.numeric(class_config$pre_filters$max_eqtl_pval)
 cutoff_snp_count = as.numeric(class_config$pre_filters$min_snp_count)
 
-if ("strong_clpp_quantile_threshold" %in% names(class_config$pre_filters))
+if ("clpp_quantile_threshold" %in% names(class_config$pre_filters))
 {
-	strong_clpp_threshold = quantile(as.numeric(data$clpp_mod), as.numeric(class_config$pre_filters$strong_clpp_quantile_threshold)) 
+	clpp_threshold = quantile(as.numeric(data$clpp_mod), as.numeric(class_config$pre_filters$clpp_quantile_threshold)) 
 } else
 {
-	strong_clpp_threshold = as.numeric(class_config$pre_filters$strong_clpp_threshold)
+	clpp_threshold = as.numeric(class_config$pre_filters$clpp_threshold)
 }
-
-if ("weak_clpp_quantile_threshold" %in% names(class_config$pre_filters))
-{
-	weak_clpp_threshold = quantile(as.numeric(data$clpp_mod), as.numeric(class_config$pre_filters$weak_clpp_quantile_threshold)) 
-
-} else
-{
-	weak_clpp_threshold = as.numeric(class_config$pre_filters$weak_clpp_threshold)
-}
-
 
 ###################################
 # Part 0: Pre-filtering
@@ -106,34 +96,26 @@ pancreas_list = rep("", length(loci_list))
 # Part 1: General sorting
 ###################################
 
-summary = sub %>% group_by(locus, ensembl) %>% summarize(colocs=sum(clpp_mod >= strong_clpp_threshold), weak_colocs=sum((clpp_mod >= weak_clpp_threshold) & (clpp_mod < strong_clpp_threshold)))
-coloc_counts = summary %>% group_by(locus) %>% summarize(strong_coloc_genes = sum(colocs > 0), weak_coloc_genes = sum((weak_colocs > 0) & (colocs == 0)), any_coloc_genes=sum((colocs > 0) | (weak_colocs > 0)), candidates=length(ensembl))
+
+summary = sub %>% group_by(locus, ensembl) %>% summarize(colocs=sum(clpp_mod >= clpp_threshold))
+coloc_counts = summary %>% group_by(locus) %>% summarize(coloc_genes = sum(colocs > 0), any_coloc_genes=sum(colocs > 0), candidates=length(ensembl))
 
 candidates_equals = function(x, loci, coloc_matrix)
 {
 	return(loci[loci %in% (coloc_matrix[coloc_counts$candidates == x,]$locus)])
 }
-strong_equals = function(x, loci, coloc_matrix)
+coloc_equals = function(x, loci, coloc_matrix)
 {
-	return(loci[loci %in% (coloc_matrix[coloc_counts$strong_coloc_genes == x,]$locus)])
-}
-weak_equals = function(x, loci, coloc_matrix)
-{
-	return(loci[loci %in% (coloc_matrix[coloc_counts$weak_coloc_genes == x,]$locus)])
+	return(loci[loci %in% (coloc_matrix[coloc_counts$coloc_genes == x,]$locus)])
 }
 candidates_greater_than = function(x, loci, coloc_matrix)
 {
 	return(loci[loci %in% (coloc_matrix[coloc_counts$candidates > x,]$locus)])
 }
-strong_greater_than = function(x, loci, coloc_matrix)
+coloc_greater_than = function(x, loci, coloc_matrix)
 {
-	return(loci[loci %in% (coloc_matrix[coloc_counts$strong_coloc_genes > x,]$locus)])
+	return(loci[loci %in% (coloc_matrix[coloc_counts$coloc_genes > x,]$locus)])
 }
-weak_greater_than = function(x, loci, coloc_matrix)
-{
-	return(loci[loci %in% (coloc_matrix[coloc_counts$weak_coloc_genes > x,]$locus)])
-}
-
 for (type in names(class_config$step1_coloc_sorting))
 {
 	pass = coloc_counts$locus
@@ -142,25 +124,17 @@ for (type in names(class_config$step1_coloc_sorting))
 	{
 		pass = candidates_equals(class_config$step1_coloc_sorting[[type]][[1]]["candidates_equals"], pass, coloc_counts)
 	}
-	if ("strong_equals" %in% names(class_config$step1_coloc_sorting[[type]][[1]]))
+	if ("coloc_equals" %in% names(class_config$step1_coloc_sorting[[type]][[1]]))
 	{
-		pass = strong_equals(class_config$step1_coloc_sorting[[type]][[1]]["strong_equals"], pass, coloc_counts)
-	}
-	if ("weak_equals" %in% names(class_config$step1_coloc_sorting[[type]][[1]]))
-	{
-		pass = weak_equals(class_config$step1_coloc_sorting[[type]][[1]]["weak_equals"], pass, coloc_counts)
+		pass = coloc_equals(class_config$step1_coloc_sorting[[type]][[1]]["coloc_equals"], pass, coloc_counts)
 	}
 	if ("candidates_greater_than" %in% names(class_config$step1_coloc_sorting[[type]][[1]]))
 	{
 		pass = candidates_greater_than(class_config$step1_coloc_sorting[[type]][[1]]["candidates_greater_than"], pass, coloc_counts)
 	}
-	if ("strong_greater_than" %in% names(class_config$step1_coloc_sorting[[type]][[1]]))
+	if ("coloc_greater_than" %in% names(class_config$step1_coloc_sorting[[type]][[1]]))
 	{
-		pass = strong_greater_than(class_config$step1_coloc_sorting[[type]][[1]]["strong_greater_than"], pass, coloc_counts)
-	}
-	if ("weak_greater_than" %in% names(class_config$step1_coloc_sorting[[type]][[1]]))
-	{
-		pass = weak_greater_than(class_config$step1_coloc_sorting[[type]][[1]]["weak_greater_than"], pass, coloc_counts)
+		pass = coloc_greater_than(class_config$step1_coloc_sorting[[type]][[1]]["coloc_greater_than"], pass, coloc_counts)
 	}
 	stopifnot(sum(step1_list[which(loci_list %in% pass)] != "") == 0)
 	step1_list[which(loci_list %in% pass)] = type
@@ -174,22 +148,22 @@ stopifnot(sum(step1_list == "") == 0)
 # Part 2: Tissue-specificity
 ###################################
 
-# Figure out which tissues had strong, weak, no colocs at each locus
-tissue_coloc = sub %>% group_by(locus, eqtl_file) %>% summarize(has_strong_coloc = as.numeric(sum(clpp_mod > strong_clpp_threshold) > 0), has_weak_only = as.numeric((sum(clpp_mod > strong_clpp_threshold) == 0) & (sum(clpp_mod > weak_clpp_threshold) > 0)), has_no_coloc = as.numeric(sum(clpp_mod > weak_clpp_threshold) == 0))
+# Figure out which tissues had colocs at each locus
+tissue_coloc = sub %>% group_by(locus, eqtl_file) %>% summarize(has_coloc = as.numeric(sum(clpp_mod > clpp_threshold) > 0), has_no_coloc = as.numeric(sum(clpp_mod > clpp_threshold) == 0))
 
 # Make sure all groups have been assigned to exactly one of these classes
-stopifnot(sum(rowSums(tissue_coloc[,3:5]) == 0) == 0)
+stopifnot(sum(rowSums(tissue_coloc[,3:4]) == 0) == 0)
 
-strong = tissue_coloc[tissue_coloc$has_strong_coloc == 1,] 
-strong_loci = unique(strong$locus)
-strong_classes = sapply(strong_loci, function(x)
+coloc = tissue_coloc[tissue_coloc$has_coloc == 1,] 
+coloc_loci = unique(coloc$locus)
+coloc_classes = sapply(coloc_loci, function(x)
        {
 
-		tissues = strong[strong$locus == x,]$eqtl_file
+		tissues = coloc[coloc$locus == x,]$eqtl_file
        		# Test whether the colocalized tissues match some
        		# tissue group of interest
 
-       		# See if there's a strong coloc in Pancreas
+       		# See if there's a coloc in Pancreas
        		for (i in 1:length(class_config$step2_tissue_sorting))
 		{
 			type = class_config$step2_tissue_sorting[[i]]
@@ -207,51 +181,17 @@ strong_classes = sapply(strong_loci, function(x)
 		return("Other")
        })
 
-step2_list[which(loci_list %in% strong_loci)] = strong_classes
-
-# Then check weak colocs
-weak = tissue_coloc[tissue_coloc$has_weak_only == 1,]
-weak_loci = unique(weak$locus)
-# We only care about weak colocs if there aren't strong colocs
-weak_loci = weak_loci[!(weak_loci %in% strong_loci)]
-weak_classes = sapply(weak_loci, function(x)
-       {
-		tissues = weak[weak$locus == x,]$eqtl_file
-       		# Test whether the colocalized tissues match some
-       		# tissue group of interest
-       		
-       		# See if there's a strong coloc in Pancreas
-		for (i in 1:length(class_config$step2_tissue_sorting))
-		{
-			type = class_config$step2_tissue_sorting[i]
-			# It's a match if there are no tissues colocalized
-			# that are not in this class
-			if(sum(!(tissues %in% type$tissues)) == 0)
-			{
-				return(type$name)
-			}
-
-		}
-		# If not, it still does have at least one coloc,
-		# so doesn't belong in the "None" category
-		return("Other")
-       })
-if (length(weak_classes) != 0)
-{
-	step2_list[which(loci_list %in% weak_loci)] = weak_classes
-}
+step2_list[which(loci_list %in% coloc_loci)] = coloc_classes
 
 # Finally, the rest should have no colocs at all
 # Make sure these loci actually have no colocs, then tag them
-coloc_by_locus = tissue_coloc %>% group_by(locus) %>% summarize(total_coloc = sum(has_strong_coloc + has_weak_only) == 0)
+coloc_by_locus = tissue_coloc %>% group_by(locus) %>% summarize(total_coloc = sum(has_coloc) == 0)
 stopifnot(sum(!(step2_list[which(loci_list %in% coloc_by_locus$locus[coloc_by_locus$total_coloc])] == "")) == 0)
 step2_list[which(loci_list %in% coloc_by_locus$locus[coloc_by_locus$total_coloc])] = "None"
 
-pancreas_strong = tissue_coloc[grepl("Pancreas", tissue_coloc$eqtl_file) & (tissue_coloc$has_strong_coloc == 1),]
-pancreas_weak = tissue_coloc[grepl("Pancreas", tissue_coloc$eqtl_file) & (tissue_coloc$has_weak_only == 1),]
+pancreas_coloc = tissue_coloc[grepl("Pancreas", tissue_coloc$eqtl_file) & (tissue_coloc$has_coloc == 1),]
 pancreas_list[rep(TRUE, length(pancreas_list))] = "none"
-pancreas_list[which(loci_list %in% unique(pancreas_strong$locus))] = "strong"
-pancreas_list[which(loci_list %in% unique(pancreas_weak$locus))] = "weak"
+pancreas_list[which(loci_list %in% unique(pancreas_coloc$locus))] = "coloc"
 
 
 # Just make sure every site's been assigned now
@@ -268,7 +208,7 @@ top_colocs = sub %>% group_by(locus, base_gwas_file) %>% summarize(best = max(cl
 gwas_cumul_loci = c()
 for (i in 1:length(class_config$step3_gwas_sorting))
 {
-	gwas_loci = unique(top_colocs[(top_colocs$base_gwas_file %in% class_config$step3_gwas_sorting[[i]][["traits"]]) & (top_colocs$best > weak_clpp_threshold),]$locus)
+	gwas_loci = unique(top_colocs[(top_colocs$base_gwas_file %in% class_config$step3_gwas_sorting[[i]][["traits"]]) & (top_colocs$best > clpp_threshold),]$locus)
 	gwas_loci = gwas_loci[!(gwas_loci %in% gwas_cumul_loci)]
 	step3_list[which(loci_list %in% gwas_loci)] = class_config$step3_gwas_sorting[[i]][["name"]]
 
@@ -277,7 +217,7 @@ for (i in 1:length(class_config$step3_gwas_sorting))
 
 # The remainder of colocalizing loci will be tagged as "other".
 # This only matters if we have traits that are in none of the tiers.
-loci_other = top_colocs[top_colocs$best > weak_clpp_threshold,]$locus
+loci_other = top_colocs[top_colocs$best > clpp_threshold,]$locus
 loci_other = loci_other[!(loci_other %in% gwas_cumul_loci)]
 step3_list[which(loci_list %in% loci_other)] = "Other"
 
@@ -295,31 +235,23 @@ stopifnot(sum(step3_list == "") == 0)
 # - all candidate sQTL genes
 # - all candidate sQTL features
 # - all candidate genes (either)
-# - all strong colocalized eQTL genes
-# - all strong colocalized sQTL genes
-# - all strong colocalized sQTL features
-# - all strong colocalized genes (either)
-# - all weak colocalized eQTL genes
-# - all weak colocalized sQTL genes
-# - all weak colocalized sQTL features
-# - all weak colocalized genes (either)
+# - all colocalized eQTL genes
+# - all colocalized sQTL genes
+# - all colocalized sQTL features
+# - all colocalized genes (either)
 #############################################
 coloc_genes = sub %>% group_by(locus) %>% summarize(candidate_genes = paste(unique(ensembl), collapse=";"), 
 				      candidate_eqtl_genes = paste(unique(ensembl[grepl("eQTL", eqtl_file)]), collapse=";"), 
 				      candidate_sqtl_genes = paste(unique(ensembl[grepl("sQTL", eqtl_file)]), collapse=";"), 
 				      candidate_sqtl_features = paste(unique(feature[grepl("sQTL", eqtl_file)]), collapse=";"),
-				      weak_coloc_genes = paste(unique(ensembl[(clpp_mod > weak_clpp_threshold) & (clpp_mod < strong_clpp_threshold)]), collapse=";"), 
-				      weak_coloc_eqtl_genes = paste(unique(ensembl[(clpp_mod > weak_clpp_threshold) & (clpp_mod < strong_clpp_threshold)& grepl("eQTL", eqtl_file)]), collapse=";"), 
-				      weak_coloc_sqtl_genes = paste(unique(ensembl[(clpp_mod > weak_clpp_threshold) & (clpp_mod < strong_clpp_threshold)& grepl("sQTL", eqtl_file)]), collapse=";"), 
-				      weak_coloc_sqtl_features = paste(unique(feature[(clpp_mod > weak_clpp_threshold) & (clpp_mod < strong_clpp_threshold) & grepl("sQTL", eqtl_file)]), collapse=";"),
-				      strong_coloc_genes = paste(unique(ensembl[(clpp_mod >= strong_clpp_threshold)]), collapse=";"), 
-				      strong_coloc_eqtl_genes = paste(unique(ensembl[(clpp_mod >= strong_clpp_threshold)& grepl("eQTL", eqtl_file)]), collapse=";"), 
-				      strong_coloc_sqtl_genes = paste(unique(ensembl[(clpp_mod >= strong_clpp_threshold)& grepl("sQTL", eqtl_file)]), collapse=";"), 
-				      strong_coloc_sqtl_features = paste(unique(feature[(clpp_mod >= strong_clpp_threshold) & grepl("sQTL", eqtl_file)]), collapse=";"),
-				      strong_coloc_both = paste(unique(ensembl[(clpp_mod >= strong_clpp_threshold)& grepl("eQTL", eqtl_file)])[unique(ensembl[(clpp_mod >= strong_clpp_threshold)& grepl("eQTL", eqtl_file)]) %in% unique(ensembl[(clpp_mod >= strong_clpp_threshold)& grepl("sQTL", eqtl_file)])], collapse=";"),
-				      strong_coloc_traits = paste(unique(gwas_short[(clpp_mod >= strong_clpp_threshold)]), collapse=","),
-				      all_lead_gwas_snps=paste(unique(rsid[(clpp_mod >= strong_clpp_threshold)]),collapse=","),
-				      all_lead_gwas_coords=paste(unique(ref_snp[(clpp_mod >= strong_clpp_threshold)]),collapse=",")
+				      coloc_genes = paste(unique(ensembl[(clpp_mod >= clpp_threshold)]), collapse=";"), 
+				      coloc_eqtl_genes = paste(unique(ensembl[(clpp_mod >= clpp_threshold)& grepl("eQTL", eqtl_file)]), collapse=";"), 
+				      coloc_sqtl_genes = paste(unique(ensembl[(clpp_mod >= clpp_threshold)& grepl("sQTL", eqtl_file)]), collapse=";"), 
+				      coloc_sqtl_features = paste(unique(feature[(clpp_mod >= clpp_threshold) & grepl("sQTL", eqtl_file)]), collapse=";"),
+				      coloc_both = paste(unique(ensembl[(clpp_mod >= clpp_threshold)& grepl("eQTL", eqtl_file)])[unique(ensembl[(clpp_mod >= clpp_threshold)& grepl("eQTL", eqtl_file)]) %in% unique(ensembl[(clpp_mod >= clpp_threshold)& grepl("sQTL", eqtl_file)])], collapse=";"),
+				      coloc_traits = paste(unique(gwas_short[(clpp_mod >= clpp_threshold)]), collapse=","),
+				      all_lead_gwas_snps=paste(unique(rsid[(clpp_mod >= clpp_threshold)]),collapse=","),
+				      all_lead_gwas_coords=paste(unique(ref_snp[(clpp_mod >= clpp_threshold)]),collapse=",")
 				      )
 
 
