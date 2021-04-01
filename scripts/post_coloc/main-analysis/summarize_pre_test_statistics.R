@@ -100,7 +100,7 @@ group_to_loci = function(x)
         loc_nums = rep(0, length(ids))
 
 	# I ran liftOver to convert to hg38
-	# liftOver fourier_ls-all.hg19.bed /mnt/lab_data/montgomery/shared/liftOver/chains/hg19ToHg38.over.chain.gz fourier_ls-all.hg38.bed fourier_ls-all.hg38.failed.bed 
+	# liftOver fourier_ls-all.hg19.bed data/liftOver/chains/hg19ToHg38.over.chain.gz fourier_ls-all.hg38.bed fourier_ls-all.hg38.failed.bed 
 
 	# Load European independent LD block partitioning from LDetect
 	ldetect = read.table("data/ldetect/fourier_ls-all.hg38.connected.bed", header=FALSE)
@@ -179,9 +179,6 @@ testable_snps = read.table(config$coloc_test_list, header=TRUE)
 
 testable_snps$source_file = testable_snps$source_file
 testable_snps$lookup_file = testable_snps$lookup_file
-testable_snps$source_file = gsub("/users/mgloud/projects/insulin_resistance/", "", testable_snps$source_file)
-testable_snps$source_trait = gsub("/users/mgloud/projects/insulin_resistance/", "", testable_snps$source_trait)
-testable_snps$lookup_file = gsub("/users/mgloud/projects/brain_gwas/", "", testable_snps$lookup_file)
 
 testable_snps = testable_snps[testable_snps$source_file %in% config$kept_traits,]
 testable_snps = testable_snps[testable_snps$lookup_file %in% config$kept_eqtls,]
@@ -269,13 +266,6 @@ results = results[!duplicated(results),]
 # want, this is probably the best we can do right now.
 results$base_gwas_file = as.character(results$base_gwas_file)
 results$eqtl_file = as.character(results$eqtl_file)
-
-#results$base_gwas_file = gsub("/users/mgloud/projects/insulin_resistance/", "", results$base_gwas_file)
-#results$eqtl_file = gsub("/users/mgloud/projects/brain_gwas/", "", results$eqtl_file)
-#errors$gwas_file = gsub("/users/mgloud/projects/insulin_resistance/", "", errors$gwas_file)
-#errors$eqtl_file = gsub("/users/mgloud/projects/brain_gwas/", "", errors$eqtl_file)
-#skips$gwas_file = gsub("/users/mgloud/projects/insulin_resistance/", "", skips$gwas_file)
-#skips$eqtl_file = gsub("/users/mgloud/projects/brain_gwas/", "", skips$eqtl_file)
 
 for (alias in names(config$gwas_aliases))
 {

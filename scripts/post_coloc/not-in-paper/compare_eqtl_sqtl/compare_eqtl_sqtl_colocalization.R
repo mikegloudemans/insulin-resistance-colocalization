@@ -1,7 +1,5 @@
 # We're keeping this simple for now...
 
-
-
 # Load in the data
 data = read.table("output/post_coloc/2020-05-11/refiltered/eqtls_and_sqtls/coloc_classification_2020-05-11.txt", sep="\t", header=TRUE, fill=TRUE)
 

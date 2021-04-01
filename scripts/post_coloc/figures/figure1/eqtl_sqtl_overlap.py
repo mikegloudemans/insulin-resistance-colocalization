@@ -1,3 +1,5 @@
+# Compute total numbers of eQTL / sQTL genes and loci, and their overlap
+
 sqtl_ensembl = set([])
 eqtl_ensembl = set([])
 sqtl_locus = set([])

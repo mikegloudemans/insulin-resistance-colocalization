@@ -1,3 +1,7 @@
+# Used to generate the numbers of testable genes in the first main figure panel
+# "testable" == expressed in GTEx in one of our tissues to a level at which
+# it could be tested for QTLs in GTEx
+
 import gzip
 testable = set([])
 

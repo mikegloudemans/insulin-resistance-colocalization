@@ -1,6 +1,10 @@
 ## Get quantiles of CLPP and CLPP-mod scores, so that
 ## we have a better idea of what a given cutoff means
 
+## For the final analysis, we counted colocalizations as
+## those that fell in the top 80% of tests, which agrees with
+## our intuitive interpretation
+
 require(qvalue)
 
 coloc_results_file = "output/post_coloc/2020-05-11/refiltered/eqtls_and_sqtls/full_coloc_results_qced.txt" 

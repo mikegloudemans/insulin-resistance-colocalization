@@ -67,34 +67,10 @@ rsids$rsid = sapply(1:dim(rsids)[1], function(i)
 )
 results = merge(rsids[c("ref_snp", "rsid")], results, by="ref_snp")
 
-# I got rid of this for now because I changed it to be for hg38 instead. Really though, I should adapt this
-# code to work for both
-#ensembl_locs = read_delim("/srv/scratch/restricted/rare_diseases/data/annot/gencode.v19.annotation.genes.bed.gz", delim="\t", col_names=FALSE)
-#colnames(ensembl_locs) = c("chrom", "gene_start", "gene_end", "feature")
-
-#results$gene_start = ensembl_locs[match(results$feature, ensembl_locs$feature),]$gene_start
-#results$gene_end = ensembl_locs[match(results$feature, ensembl_locs$feature),]$gene_end
-
-
 results$min_gwas_pval = 10^-(results$neg_log_gwas_pval)
 results$min_eqtl_pval = 10^-(results$neg_log_eqtl_pval)
 
-### View the assignment of SNPs to loci
-
-# We can verify that any group of SNPs within less than 1MB of one another have
-# been assigned the same locus number.
-
-# Make sure the assigned locus numbers are reasonable.
-# This isn't necessary anymore, since loci correspond to fixed intervals
-# from the ldetect data.
-# stopifnot(length(unique(results$locus)) == max(results$locus))
-
-# View the assignment of SNPs to loci
-sub = results[!duplicated(results$ref_snp),]
-sub[order(as.character(sub$ref_snp)),][c("ref_snp", "locus")]
-
 ### Output our results file for further in-depth analysis
 
-#results_output = results[c("rsid", "chr", "pos", "locus", "min_gwas_pval", "min_eqtl_pval", "gwas_trait", "eqtl_file", "ensembl", "hgnc", "gene_start", "gene_end", "clpp", "clpp_mod", "n_snps", "all_sig_gwas", "all_sig_eqtl")]
 results_output = results[c("rsid", "chr", "pos", "locus", "min_gwas_pval", "min_eqtl_pval", "gwas_short", "eqtl_short", "gwas_trait", "eqtl_file", "feature", "ensembl", "hgnc", "clpp", "clpp_mod", "n_snps", "all_sig_gwas", "all_sig_eqtl", "base_gwas_file")]
 write.table(results_output, paste0(config$out_dir, "/clpp_results_", config$analysis_date, ".txt"), quote=FALSE, col.names=TRUE, row.names=FALSE, sep="\t")
