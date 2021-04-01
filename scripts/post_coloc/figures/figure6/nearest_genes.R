@@ -1,6 +1,8 @@
 require(dplyr)
 require(readr)
 
+# Code to get the nearest genes for the column in Figure 6
+
 results = read.table("output/post_coloc/2020-05-11/refiltered/eqtls_and_sqtls/clpp_results_categorized_2020-05-11.txt", sep="\t", header=TRUE)
 
 # I got rid of this for now because I changed it to be for hg38 instead. Really though, I should adapt this

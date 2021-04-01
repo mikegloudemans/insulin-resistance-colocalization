@@ -2,6 +2,9 @@ require(dplyr)
 require(reshape)
 require(ggplot2)
 
+# Figure 4B
+# (Figure 4A was created manually)
+
 single_coloc_genes = read.table("data/curated_gene_sets/single_coloc_genes_updated.txt", header=FALSE)
 # Get predicted directionality of effects on each trait
 data = read.table("output/post_coloc/de_genes/coloc_directionality.txt", sep="\t", header=TRUE)
@@ -82,3 +85,6 @@ plot_figure(directions_whr)
 ggsave("output/post_coloc/plots/figure4/tiled_coloc_directionality_whr.pdf", height=9, width=3)
 plot_figure(directions_tg_hdl)	
 ggsave("output/post_coloc/plots/figure4/tiled_coloc_directionality_tg_hdl.pdf", height=8, width=3)
+
+# T2D.pdf was used for main figure
+# WHR and TG-HDL were in supplement

@@ -1,8 +1,6 @@
 require(dplyr)
 require(ggplot2)
 
-# TODO: This is screwy, try it again, I'm not using the right column
-
 data = read.table("output/post_coloc/de_genes/perturbation_by_single_coloc_with_sqtl.txt", header=TRUE)
 data$tissue_by_pert = paste(data$pert_tissue, data$perturbation, sep="_")
 
@@ -17,8 +15,9 @@ sort(colSums(table(key_stats$pert_tissue, key_stats$perturbation)))
 
 accepted_perturbations = c("TGFB1",  "RETA", "IGF1",  "IL-6", "SP60",  "GLUC", "TNFa", "IBMX", "INSU", "DEXA")
 
-
 ### Part 1: Tissues ###
+
+# (This was not ultimately included in the paper)
 
 tissue_perturbations = c("IL-6", "ISOP", "LAUR", "ROSI")
 
@@ -61,6 +60,7 @@ g=ggplot(data = tissue_stats,
 
 ggsave("output/post_coloc/plots/figure5/tiled_de_by_coloc_tissues.pdf", height=18, width=6)
 
+# This is the part that was included in the paper
 
 ### Part 2: Tissues ###
 

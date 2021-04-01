@@ -1,3 +1,5 @@
+# Counts of genes / loci tested and colocalized for a few of the supplementary tables
+
 clpp_mod_cutoff = 0.35
 
 d = read.table("output/post_coloc/2020-05-11/refiltered/eqtls_and_sqtls/clpp_results_categorized_2020-05-11.txt", header=TRUE, sep="\t")

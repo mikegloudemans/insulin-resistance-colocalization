@@ -2,8 +2,8 @@
 
 Analysis performed by Mike Gloudemans
 
-With input from Ivan Cárcamo-Oribe, Brunilda Balliu, Abhiram Rao, Joshua Knowles, Erik Ingelsson, 
-Stephen Montgomery, and Thomas Quertermous
+With contributions from Brunilda Balliu, Ivan Cárcamo-Oribe, Abhiram Rao, Joshua Knowles, Erik Ingelsson,
+Matthew Durrant, Stephen Montgomery, and Thomas Quertermous
 
 ## Summary
 
@@ -17,112 +17,6 @@ The complete analysis can be run sequentially from `pipe.sh` in the top-level pr
 NOTE: The scripts can ONLY be run from this directory, as the file paths are specified relative to this
 top level.
 
-##### Table of Contents  
-[TOC]
-
-## Methods (`scripts`)
-
-Here I describe the individual steps in the analysis, all of which can be found in the `scripts` folder.
-
-For the sake of clarity, I describe the individual steps in the order in
-which they appear in `pipe.sh`, rather than alphabetizing them by filename.
-
-### `scripts/pre_coloc`
-
-Scripts to preprocess the GWAS and eQTL data, and to identify which loci will be tested for colocalization.
-
-#### `scripts/pre_coloc/format_gwas/munge.sh`
-
-Munge the original data files for IR-related traits into a format required to run the colocalization pipeline.
-This step might not be necessary if the data are already downloaded in a munged format, as specified below in the
-_Required Data_ section.
-
-### `scripts/colocalization`
-
-#### `scripts/colocalization/test_IR_colocs.py`
-
-Just a wrapper script to run the main colocalization pipeline, which is available as a separate Github module as 
-described below.
-
-### `scripts/post_coloc`
-
-Various scripts needed to process the output of the colocalization algorithm so that
-we can draw conclusions.
-
-I eventually hope to incorporate these steps into a more user-friendly and generalized pipeline that can be applied
-to an arbitrary set of GWAS.
-
-#### `scripts/post_coloc/config`
-
-Contains config files specifying the exact steps to be taken and filters to be used for the post-processing steps.
-
-Also, specifies the location of the output directory where post-processed results should be placed.
-
-#### `scripts/post_coloc/summarize_pre_test_statistics.R`
-
-Counts the number of SNPs, loci, and genes available at each stage of filtering in the pipeline, and writes 
-them to an output file located at `{output_directory}/full_coloc_results_qced.txt`.
-
-Also, checks to make sure all tests were run as planned (i.e. the pipeline didn't exit early, or run into 
-a formatting issue that forced it to skip over all instances of a certain GWAS). You'll need to examine
-the output of the script to ensure that not a large number of tests were dropped, since this step
-doesn't throw any actual error even if the results are unusual.
-
-#### `scripts/post_coloc/aggregate_coloc_results.R`
-
-Adds a few additional annotations, such as HGNC gene ID and rsid. Output will be placed at
-`{output_directory}/clpp_results_{analysis_date}.txt`.
-
-#### `scripts/post_coloc/last_qc_check.R`
-
-The final QC check for any final errors in the file. You'll have to inspect the output yourself
-to verify correctness. Specifically, we look for:
-
-* Were the vast majority of candidate SNPs actually tested for colocalization? (Some dropout is normal due
-  to minor eQTL / GWAS / reference genome discrepancies, as well as due to loci for which the eQTL gene lies
-  too far from the GWAS locus to be confidently tested. But if more than ~5% of loci were dropped, this usually
-  means something went wrong, and you'll have to look at the output from the colocalization pipeline itself to 
-  understand
-  the error.)
-* Does the final range of p-values for best GWAS SNPs per locus match our specified thresholds?
-* Does the final range of p-values for best eQTL SNPs per locus match our specified thresholds?
-* Does every individual GWAS and every individual eQTL study have a reasonable number of tested loci? (e.g. not 0)
-* Are there a large number of loci for which not many SNPs (e.g. < 10) were present in the GWAS / eQTL overlap? 
-  (This would
-  imply that a colocalization test is inappropriate for these loci.) If so, consult the accompanying 
-  table to see which files have many loci without many SNPs present.
-
-#### `scripts/post_coloc/classify_results`
-
-After the colocalization results have been aggregated into a single file and QC checks have been performed,
-we then add an additional classification step for prioritizing loci with certain characteristics or from
-specific high-priority GWAS, as described in the methods section of the paper. 
-
-This analysis is performed using the R script in `scripts/post_coloc/classify_results/classify_results.R` and 
-requires an additional configuration file that specifies the exact classifications to be made. This config file 
-(of which several examples are already included) can be modified to 
-work with virtually any GWAS and QTL files for arbitrary classification schema, but a description of that is 
-outside of the scope of this project. I plan to release that independently of this project and 
-will link it here when published.
-
-#### `scripts/post_coloc/get_variant_veps.R`
-
-Fetch the Variant Effect Predictor annotations for all SNPs overlapping the loci of interest, as well 
-as all "LD buddies" of the lead GWAS SNPs (r2 < 0.8). This may not be necessary for all applications, 
-but it gives us an initial sense of how many of the candidate colocalizations are likely intergenic vs. 
-how many overlap genic features such as coding regions, promoters, and/or introns.
-Output file will be placed in `{output_directory}/vep_summary_{analysis_date}.txt`.
-
-### `scripts/auxiliary`
-
-A few other miscellaneous scripts for analyses that may be of interest but were not explicitly described in 
-the paper.
-
-#### `scripts/auxiliary/get_quantiles.R`
-
-Empirically determine what levels of the modified CLPP score represent top 20% (weak) and 
-top 5% (strong) colocalization in the list of candidate loci tested. This is done using the
-CLPP results located at `{output_directory}/full_coloc_results_qced.txt`.
 
 ## Required Tools / Dependencies
 
@@ -138,20 +32,9 @@ analyses, you will have to install or link these tools within the `bin` subfolde
   [FINEMAP](http://www.christianbenner.com/) (Benner et al. 2016)
   and [eCAVIAR](http://zarlab.cs.ucla.edu/tag/ecaviar/) (Hormozdiari et al. 2016), 
   available in a basic form at https://bitbucket.org/mgloud/production_coloc_pipeline/src. 
-  An extended and hopefully easier-to-use pipeline with a greater variety of options and analyses, closer to 
-  what was used for this
-  paper, will soon be available at https://github.com/mikegloudemans/ensemble_coloc_pipeline.
 
-## Required Data
-
-This project makes uses of a variety of data tables, some already publicly available
-and some internally generated. I'm currently exploring ways to just link all or most of the required
-data files here, as well as key intermediate files and results, all as a single download. 
-Until then, please contact me directly (see _Contact_ section below) and I'll share 
-the relevant files directly, ASAP.
-
-90% of the analysis, including the core colocalization analysis, can be completed using just the following
-data files:
+  An extended and hopefully easier-to-use pipeline with a greater variety of options and analyses
+  will soon be available at https://github.com/mikegloudemans/ensemble_coloc_pipeline.
 
 ### Getting started
 
@@ -163,6 +46,9 @@ data files:
 * GTEx v8 QTL association statistics can be downloaded from the [GTEx Portal](https://gtexportal.org/home/datasets). Some minor pre-processing will be required to run these scripts; this process is described [here](https://bitbucket.org/mgloud/production_coloc_pipeline/src).
 
 ### All required data
+
+If you're having trouble accessing any of these data, please contact me (see Contact section
+below) and I can quickly point you to the right location to obtain them, or set up a direct transfer.
 
 To run all the scripts listed here, the `data` folder must contain all of the following files:
 
@@ -179,11 +65,25 @@ post-processing steps.
 * `data/cadd`: Should contain a CADD file with VEP consequence predictions for every possible variant. May be 
   skipped if necessary.
 * `data/hgnc`: The file `mart_export.txt` should contain a basic mapping of Ensembl gene IDs to HGNC names, 
-  obtained through Biomart. This step
-  can be skipped if such a file is not yet available.
+  obtained through Biomart. This step can be omitted if such a file is not present.
 * `data/ld`: Pairwise LD scores from 1K Genomes Phase 1, used for selecting LD buddies in the Variant Effect 
-  Predictor annotation step, which
-  can be skipped if necessary.
+  Predictor annotation step, which can also be skipped if necessary.
+
+## About the scripts
+
+I've broadly organized the scripts into "pre-coloc", "colocalization", and "post-coloc" sections. Most of the
+code in this project is focused on the "post-coloc" analysis, since the other two parts of the analysis
+lean heavily on code from other projects (described and linked above).
+
+Scripts to generate figures for the paper are in a dedicated folder.
+
+Many of these scripts have wide-ranging applications but are currently geared towards our IR-specific
+application. Feel free to contact me if you're trying to figure out how to gear a particular script
+for your own analysis; some customization may be necessary but it's certainly doable.
+
+I'm also working on a general Snakemake pipeline "post-coloc-toolkit", which I hope to make available
+soon, and will work not only on our IR data but on any set of GWAS and QTL summary statistics! I will
+link it from here when it's public.
 
 ## Contact
 

@@ -47,4 +47,4 @@ g = ggplot(in_data, aes(x=CLPP_mod, fill=tissue)) +
 	xlab("Colocalization probability % (CLPP-mod)")
 
 
-ggsave("output/post_coloc/plots/supplement-tissue-specific/supplement-tissue-specific.pdf", width=6, height=4)
+ggsave("output/post_coloc/plots/tissue-specificity-robustness/supplement-tissue-specific.pdf", width=6, height=4)
