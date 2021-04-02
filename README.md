@@ -5,6 +5,8 @@ Analysis performed by Mike Gloudemans
 With contributions from Brunilda Balliu, Ivan Cárcamo-Oribe, Abhiram Rao, Joshua Knowles, Erik Ingelsson,
 Matthew Durrant, Stephen Montgomery, and Thomas Quertermous
 
+You can view PDFs of the full heatmaps for all tested loci at https://zenodo.org/record/4659095.
+
 ## Summary
 
 This project contains the scripts required to perform the colocalization analyses described in the paper.
@@ -16,7 +18,6 @@ run from this top-level directory, or they'll be unable to locate the required f
 The complete analysis can be run sequentially from `pipe.sh` in the top-level project directory.
 NOTE: The scripts can ONLY be run from this directory, as the file paths are specified relative to this
 top level.
-
 
 ## Required Tools / Dependencies
 
