@@ -1,9 +1,9 @@
 # Insulin Resistance Colocalization Analysis
 
-Analysis performed by Mike Gloudemans
+Analysis performed by Mike Gloudemans and Brunilda Balliu
 
-With contributions from Brunilda Balliu, Ivan Cárcamo-Oribe, Abhiram Rao, Joshua Knowles, Erik Ingelsson,
-Matthew Durrant, Stephen Montgomery, and Thomas Quertermous
+With contributions from Matthew Durrant, Martin Wabitsch, Erik Ingelsson, Thomas Quertermous,
+Joshua Knowles, Stephen Montgomery, and Ivan Cárcamo-Oribe
 
 You can view PDFs of the full heatmaps for all tested loci at https://zenodo.org/record/4659095.
 
