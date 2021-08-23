@@ -2,7 +2,7 @@
 
 Analysis performed by Mike Gloudemans and Brunilda Balliu
 
-With contributions from Matthew Durrant, Martin Wabitsch, Erik Ingelsson, Thomas Quertermous,
+With contributions from Daniel Nachun, Matthew Durrant, Martin Wabitsch, Erik Ingelsson, Thomas Quertermous,
 Joshua Knowles, Stephen Montgomery, and Ivan Cárcamo-Oribe
 
 You can view PDFs of the full heatmaps for all tested loci at https://zenodo.org/record/4659095.
