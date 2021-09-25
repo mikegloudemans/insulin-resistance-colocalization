@@ -11,6 +11,8 @@ You can view PDFs of the full heatmaps for all tested loci at https://zenodo.org
 
 This project contains the scripts required to perform the colocalization analyses described in the paper.
 
+A generalized tool for generating similar heatmaps for any set of GWAS and QTL studies is at https://github.com/mikegloudemans/post-coloc-toolkit/.
+
 The top-level project directory should contain the folders `bin`, `data`, `output`, `tmp`, 
 and `scripts`. All scripts should be
 run from this top-level directory, or they'll be unable to locate the required files.
